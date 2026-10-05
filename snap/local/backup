@@ -16,6 +16,9 @@ fi
 umask 077
 mkdir -p "$BACKUP_DIR"
 chmod 0700 "$BACKUP_DIR"
+# The caller's working directory (often a home directory) is outside what the
+# snap may read, and find needs to open it.
+cd "$BACKUP_DIR" || exit 1
 keep_days="$(cfg backup.keep-days 7)"
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 out="$BACKUP_DIR/nakama-$stamp.dump"

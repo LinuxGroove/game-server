@@ -33,6 +33,8 @@ export PATH="$SNAP/bin:$SNAP/usr/bin:$PATH"
 # match their Debian multiarch names.
 LD_LIBRARY_PATH="$SNAP/usr/lib/$(uname -m)-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export LD_LIBRARY_PATH
+# libpq would otherwise probe GSSAPI config outside the snap's confinement.
+export PGGSSENCMODE=disable
 
 log() {
   echo "$*" >&2
