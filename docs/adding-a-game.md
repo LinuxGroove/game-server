@@ -107,8 +107,9 @@ so the rules are strict:
 - Throw with `Util.fail(Code.X, "reason: explanation")` so clients get a
   stable reason.
 - Rate-limit anything that writes with `RateLimit.check`.
-- Read the room roster with `nk.matchSignal(matchId, '{"op": "roster"}')` to
-  check that reported players were really in the room
+- Check that reported players were really in the room with
+  `Rooms.roster(nk, game, matchId)`, which works for both transports and gives
+  the host (when the server knows it), the members and who is present now
   ([lantern-out.ts](../modules/src/games/lantern-out.ts) is the example).
 
 The runtime is ES5 JavaScript (goja): no `async`, no Node or browser APIs, and
