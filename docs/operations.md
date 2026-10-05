@@ -193,8 +193,35 @@ first scaling step. When the database needs its own machine:
    unless your database serves TLS).
 
 A managed PostgreSQL works the same way: set its `database-url` and
-`role=api`. Open-source Nakama runs as a single node, so beyond one API
-machine the options are Nakama Enterprise or separate servers per region.
+`role=api`.
+
+### Beyond one API machine (planned, not built)
+
+Open-source Nakama doesn't cluster: sockets, rooms, the matchmaker and
+presence live in one node's memory, and clustering is only in Heroic Labs'
+paid edition. Two copies of the same server behind a load balancer would
+split players into groups that can't see each other. A single node handles
+tens of thousands of players online at once, so this is a later problem.
+When it comes, the plan is Kubernetes, in this order:
+
+1. **One Nakama per game, sharing one database.** Sessions are bound to one
+   game and rooms and matchmaking never cross games, so each game (or group
+   of small games) can run its own Nakama with its own hostname, with only
+   that game turned on (`games.<id>.enabled`). Accounts and leaderboards stay
+   in the shared PostgreSQL. To check first: leaderboard reset schedules and
+   rank caches when several nodes share a database.
+2. **Highly available PostgreSQL** with CloudNativePG: a standby that takes
+   over on failure, continuous WAL backups to object storage and
+   point-in-time restore, replacing the nightly dumps.
+3. **A Helm chart** with cert-manager for HTTPS, health checks so a crashed
+   server restarts on its own, and Prometheus scraping of Nakama's metrics.
+   CI would test it on a throwaway kind cluster.
+4. **Server-run matches** for games that need them: headless Godot servers
+   scheduled by Agones, which scales them with demand.
+
+Kubernetes with a database standby costs several times the single-machine
+setup, so it waits until player numbers call for it. The snap stays the way
+to run small servers.
 
 ## Updates
 
