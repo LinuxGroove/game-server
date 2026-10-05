@@ -22,5 +22,5 @@ const GAME_SANDBOX: Registry.GameDef = {
   ],
   blobs: [{ name: "ghost", maxBytes: 65536, contentTypes: ["application/octet-stream"], uploadsPerHour: 60 }],
   shares: [{ name: "level", maxBytes: 16384, perUserLimit: 3 }],
-  rooms: { minPlayers: 2, maxPlayers: 4, tickRate: 10, mode: "host", matchmaking: true, hostGraceSec: 5 },
+  rooms: { transport: "relay", minPlayers: 2, maxPlayers: 4, tickRate: 10, mode: "host", matchmaking: true, hostGraceSec: 5 },
 };

@@ -1,9 +1,10 @@
 // Lantern Out: social deduction for 4-10 players (game-ideas, idea 14).
 //
-// Online play uses relay rooms in "host" mode: the host's device runs the
-// round, holds every secret role, and sends each player only what that
-// player may see (targeted relay messages). The server never sees roles
-// until the host reports the result at the end of a round.
+// Online play uses bridge rooms: Godot's high-level multiplayer over Nakama
+// relayed matches named "lantern-out:<CODE>", the same game code as LAN. The
+// host's device runs the round, holds every secret role, and sends each
+// player only what that player may see. The server never sees roles until the
+// host reports the result at the end of a round.
 
 const GAME_LANTERN_OUT: Registry.GameDef = {
   id: "lantern-out",
@@ -27,7 +28,8 @@ const GAME_LANTERN_OUT: Registry.GameDef = {
   ],
   blobs: [],
   shares: [],
-  rooms: { minPlayers: 4, maxPlayers: 10, tickRate: 20, mode: "host", matchmaking: true, hostGraceSec: 20 },
+  // tickRate, mode and hostGraceSec only apply to relay rooms.
+  rooms: { transport: "bridge", minPlayers: 4, maxPlayers: 10, tickRate: 20, mode: "host", matchmaking: true, hostGraceSec: 20 },
 };
 
 namespace LanternOut {
@@ -80,7 +82,8 @@ namespace LanternOut {
 }
 
 /**
- * lantern-out.round_report — the host reports a finished round.
+ * lantern-out.round_report — the host reports a finished round. Bots are
+ * left out of `players`; only signed-in players are credited.
  * {match_id, round, winner: "village"|"hollow", players: [{user_id, team, survived}]}
  * -> {recorded}
  */
@@ -100,22 +103,16 @@ function rpcLanternOutRoundReport(ctx: nkruntime.Context, logger: nkruntime.Logg
   const players = LanternOut.parsePlayers(req["players"]);
   RateLimit.check(nk, userId, "lantern-out.round_report", 30, 3600);
 
-  let roster: any;
-  try {
-    roster = JSON.parse(nk.matchSignal(matchId, JSON.stringify({ op: "roster" })));
-  } catch (e) {
-    return Util.fail(Code.NOT_FOUND, "room_not_found: the room has closed");
-  }
-  if (!roster || roster.game !== game.id) {
-    return Util.fail(Code.NOT_FOUND, "room_not_found: not a Lantern Out room");
-  }
-  if (roster.host_user_id !== userId) {
+  const roster = Rooms.roster(nk, game, matchId);
+  if (roster.host !== "" && roster.host !== userId) {
     return Util.fail(Code.PERMISSION_DENIED, "not_host: only the host reports rounds");
   }
-  const seen: string[] = roster.seen || [];
+  if (roster.host === "" && roster.present.indexOf(userId) < 0) {
+    return Util.fail(Code.PERMISSION_DENIED, "not_host: only players in the room report rounds");
+  }
   for (let i = 0; i < players.length; i++) {
-    if (seen.indexOf(players[i].user_id) < 0) {
-      return Util.fail(Code.INVALID_ARGUMENT, "not_in_room: " + players[i].user_id + " never joined this room");
+    if (roster.members.indexOf(players[i].user_id) < 0) {
+      return Util.fail(Code.INVALID_ARGUMENT, "not_in_room: " + players[i].user_id + " is not in this room");
     }
   }
 

@@ -33,7 +33,9 @@ const GAME_FOAM_FRENZY: Registry.GameDef = {
   shares: [
     { name: "track", maxBytes: 65536, perUserLimit: 50 },
   ],
-  rooms: { minPlayers: 2, maxPlayers: 8, tickRate: 20, mode: "broadcast", matchmaking: true, hostGraceSec: 15 },
+  // Godot high-level multiplayer through NakamaMultiplayerBridge. tickRate,
+  // mode and hostGraceSec only matter for transport: "relay".
+  rooms: { transport: "bridge", minPlayers: 2, maxPlayers: 8, tickRate: 20, mode: "host", matchmaking: true, hostGraceSec: 15 },
 };
 ```
 
@@ -48,10 +50,14 @@ What each part gives the game is in [game-api.md](game-api.md). Notes:
   (for stats or rewards the game must not be able to forge). `read: "owner"`
   stops players from making objects public. The name `shares` is reserved.
 - **Blobs** need object storage on the server; games must work without it.
-- **Rooms.** Use `host` mode when one device must hold secrets or run the
-  simulation (the host is the authority and the room closes if it leaves);
-  `broadcast` when every player is equal, in which case the host role moves
-  on when the host leaves. Set `rooms: null` for games without online play.
+- **Rooms.** Pick `transport: "bridge"` for Godot games that use the shared
+  add-on's online service: Godot's high-level multiplayer runs over Nakama
+  relayed matches named `<game>:<CODE>`, with exactly the game's LAN code.
+  Pick `"relay"` when the server should run the room: server-issued codes,
+  public room lists, locking, kicks, and host-only messages. For relay rooms,
+  `host` mode makes one device the authority (the room closes if it leaves) and
+  `broadcast` makes every player equal, with the host role moving on when the
+  host leaves. Set `rooms: null` for games without online play.
 - **chat** turns on Nakama's free-text chat channels. Leave it off unless the
   game has moderation planned.
 

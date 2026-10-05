@@ -10,7 +10,7 @@ g.Registry.GAMES.push({
   ...g.GAME_SANDBOX,
   id: "party",
   enabledByDefault: true,
-  rooms: { minPlayers: 2, maxPlayers: 3, tickRate: 10, mode: "broadcast", matchmaking: false, hostGraceSec: 5 },
+  rooms: { transport: "relay", minPlayers: 2, maxPlayers: 3, tickRate: 10, mode: "broadcast", matchmaking: false, hostGraceSec: 5 },
 });
 
 function room(game, params = {}) {

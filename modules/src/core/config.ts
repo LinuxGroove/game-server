@@ -36,16 +36,26 @@ function rpcConfig(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkrunti
   for (let i = 0; i < game.shares.length; i++) {
     shares.push({ kind: game.shares[i].name, max_bytes: game.shares[i].maxBytes, per_user_limit: game.shares[i].perUserLimit });
   }
-  const rooms = game.rooms
-    ? {
-        min_players: game.rooms.minPlayers,
-        max_players: game.rooms.maxPlayers,
-        mode: game.rooms.mode,
-        matchmaking: game.rooms.matchmaking,
-        tick_rate: game.rooms.tickRate,
-        first_game_opcode: Relay.FIRST_GAME_OPCODE,
-      }
-    : null;
+  let rooms: any = null;
+  if (game.rooms && game.rooms.transport === "bridge") {
+    rooms = {
+      transport: "bridge",
+      min_players: game.rooms.minPlayers,
+      max_players: game.rooms.maxPlayers,
+      matchmaking: game.rooms.matchmaking,
+      room_name_prefix: game.id + ":",
+    };
+  } else if (game.rooms) {
+    rooms = {
+      transport: "relay",
+      min_players: game.rooms.minPlayers,
+      max_players: game.rooms.maxPlayers,
+      mode: game.rooms.mode,
+      matchmaking: game.rooms.matchmaking,
+      tick_rate: game.rooms.tickRate,
+      first_game_opcode: Relay.FIRST_GAME_OPCODE,
+    };
+  }
 
   return JSON.stringify({
     game: game.id,

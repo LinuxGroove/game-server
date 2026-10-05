@@ -392,25 +392,23 @@ async function main() {
     await sb.request({ matchmaker_remove: { ticket: t1.matchmaker_ticket.ticket } });
     sl.close();
   });
-  for (const [game, version] of [["sandbox", "1.2.0"], ["lantern-out", "0.1.0"]]) {
-    await step(`the matchmaker puts matched ${game} players in a relay room`, async () => {
-      const p1 = await new Socket(await login(game, version)).connect();
-      const p2 = await new Socket(await login(game, version)).connect();
-      await p1.request({ matchmaker_add: { min_count: 2, max_count: 2, query: "*" } });
-      await p2.request({ matchmaker_add: { min_count: 2, max_count: 2, query: "*" } });
-      const m1 = await p1.next((m) => m.matchmaker_matched, 20000);
-      const m2 = await p2.next((m) => m.matchmaker_matched, 20000);
-      assert.ok(m1.matchmaker_matched.match_id, "matched into an authoritative room");
-      assert.equal(m1.matchmaker_matched.match_id, m2.matchmaker_matched.match_id);
-      await p1.join(m1.matchmaker_matched.match_id);
-      const w = await p1.control(OP.WELCOME);
-      assert.equal(w.host_slot, w.slot, "first player in becomes host");
-      await p2.join(m2.matchmaker_matched.match_id);
-      await p2.control(OP.WELCOME);
-      p1.close();
-      p2.close();
-    });
-  }
+  await step("the matchmaker puts matched sandbox players in a relay room", async () => {
+    const p1 = await new Socket(await login("sandbox", "1.2.0")).connect();
+    const p2 = await new Socket(await login("sandbox", "1.2.0")).connect();
+    await p1.request({ matchmaker_add: { min_count: 2, max_count: 2, query: "*" } });
+    await p2.request({ matchmaker_add: { min_count: 2, max_count: 2, query: "*" } });
+    const m1 = await p1.next((m) => m.matchmaker_matched, 20000);
+    const m2 = await p2.next((m) => m.matchmaker_matched, 20000);
+    assert.ok(m1.matchmaker_matched.match_id, "matched into an authoritative room");
+    assert.equal(m1.matchmaker_matched.match_id, m2.matchmaker_matched.match_id);
+    await p1.join(m1.matchmaker_matched.match_id);
+    const w = await p1.control(OP.WELCOME);
+    assert.equal(w.host_slot, w.slot, "first player in becomes host");
+    await p2.join(m2.matchmaker_matched.match_id);
+    await p2.control(OP.WELCOME);
+    p1.close();
+    p2.close();
+  });
   await step("chat is off by default", async () => {
     await assert.rejects(sb.request({ channel_join: { target: "lobby", type: 1 } }), /chat_disabled/);
   });
@@ -424,21 +422,84 @@ async function main() {
   sb.close();
   sc.close();
 
-  // Lantern Out host reports.
-  await step("lantern-out hosts report rounds into stats and leaderboards", async () => {
+  // Lantern Out: bridge rooms (Nakama relayed matches named "lantern-out:<CODE>",
+  // as nakama-godot's NakamaMultiplayerBridge uses them).
+  const code = () => Array.from({ length: 6 }, () => "ABCDEFGHJKMNPQRSTVWXYZ23456789"[Math.floor(Math.random() * 30)]).join("");
+  const createNamed = (s, name) => s.request({ match_create: name === undefined ? {} : { name } }).then((m) => m.match);
+  await step("lantern-out rooms are named matches for its own game only", async () => {
+    const l = await login("lantern-out", "0.1.0");
+    const s = await new Socket(l).connect();
+    await assert.rejects(createNamed(s), /bad_room_name/);
+    await assert.rejects(createNamed(s, "sandbox:" + code()), /bad_room_name/);
+    await assert.rejects(createNamed(s, "lantern-out:abc"), /bad_room_name/);
+    await expectError(rpc(l, "core.room_create", {}), 400, "use_named_rooms");
+    const sbx = await new Socket(await login("sandbox", "1.2.0")).connect();
+    await assert.rejects(sbx.request({ match_create: { name: "sandbox:" + code() } }), /use_room_rpcs/);
+    s.close();
+    sbx.close();
+  });
+  await step("the first player in a lantern-out room hosts, others join by name", async () => {
+    const name = "lantern-out:" + code();
     const players = [];
-    for (let i = 0; i < 4; i++) players.push(await login("lantern-out", "0.1.0"));
-    const host = players[0];
-    const r = await rpc(host, "core.room_create", { max_players: 6 });
+    for (let i = 0; i < 3; i++) players.push(await new Socket(await login("lantern-out", "0.1.0")).connect());
+    const first = await createNamed(players[0], name);
+    assert.equal(first.size, 1);
+    assert.ok(!first.presences || first.presences.length === 0, "the first player sees an empty room and hosts");
+    const second = await createNamed(players[1], name);
+    assert.equal(second.match_id, first.match_id);
+    assert.equal(second.presences.length, 1);
+    const third = await createNamed(players[2], name);
+    // The bridge sends straight to chosen presences; only they receive it.
+    players[0].send({
+      match_data_send: { match_id: first.match_id, op_code: "9002", data: Buffer.from("secret").toString("base64"), presences: [third.self] },
+    });
+    const got = await players[2].next((m) => m.match_data && m.match_data.op_code === "9002");
+    assert.equal(Buffer.from(got.match_data.data, "base64").toString(), "secret");
+    await players[1].nothing((m) => m.match_data);
+    for (const s of players) s.close();
+  });
+  await step("full lantern-out rooms refuse an 11th player", async () => {
+    const name = "lantern-out:" + code();
     const sockets = [];
-    for (const p of players) {
-      const s = await new Socket(p).connect();
-      await s.join(r.match_id);
-      await s.control(OP.WELCOME);
+    for (let i = 0; i < 10; i++) {
+      const s = await new Socket(await login("lantern-out", "0.1.0")).connect();
+      await createNamed(s, name);
       sockets.push(s);
     }
+    const late = await new Socket(await login("lantern-out", "0.1.0")).connect();
+    await assert.rejects(createNamed(late, name), /room_full/);
+    for (const s of [...sockets, late]) s.close();
+  });
+  await step("the matchmaker gives lantern-out players a bridge room", async () => {
+    const p1 = await new Socket(await login("lantern-out", "0.1.0")).connect();
+    const p2 = await new Socket(await login("lantern-out", "0.1.0")).connect();
+    await p1.request({ matchmaker_add: { min_count: 2, max_count: 2, query: "*" } });
+    await p2.request({ matchmaker_add: { min_count: 2, max_count: 2, query: "*" } });
+    const m1 = await p1.next((m) => m.matchmaker_matched, 20000);
+    const m2 = await p2.next((m) => m.matchmaker_matched, 20000);
+    assert.ok(m1.matchmaker_matched.token && !m1.matchmaker_matched.match_id, "a relayed match token");
+    const j1 = await p1.request({ match_join: { token: m1.matchmaker_matched.token } });
+    const j2 = await p2.request({ match_join: { token: m2.matchmaker_matched.token } });
+    assert.equal(j1.match.match_id, j2.match.match_id);
+    assert.ok(j1.match.match_id.endsWith("."), "relayed match");
+    p1.close();
+    p2.close();
+  });
+  await step("lantern-out hosts report rounds into stats and leaderboards", async () => {
+    const name = "lantern-out:" + code();
+    const players = [];
+    const sockets = [];
+    let matchId = "";
+    for (let i = 0; i < 4; i++) {
+      const p = await login("lantern-out", "0.1.0");
+      const s = await new Socket(p).connect();
+      matchId = (await createNamed(s, name)).match_id;
+      players.push(p);
+      sockets.push(s);
+    }
+    const host = players[0];
     const report = {
-      match_id: r.match_id,
+      match_id: matchId,
       round: 1,
       winner: "hollow",
       players: players.map((p, i) => ({ user_id: p.userId, team: i === 3 ? "hollow" : "village", survived: i !== 1 })),

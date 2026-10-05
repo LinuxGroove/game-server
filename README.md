@@ -31,7 +31,7 @@ Run a local server with the test game turned on:
 ```sh
 (cd modules && npm ci && npm run build)
 docker compose -f deploy/compose/compose.yaml up -d --wait
-node scripts/smoke-test.mjs        # 32 end-to-end checks
+node scripts/smoke-test.mjs        # 35 end-to-end checks
 ```
 
 The server is then at `http://127.0.0.1:7350` with server key `defaultkey`,
@@ -74,8 +74,11 @@ restore, splitting the database onto its own machine, updates and monitoring.
 - **Offline first.** Games work without the server; online features are
   extras the server advertises through `core.config`.
 - **Host-authoritative rooms.** Online rooms reuse each game's LAN mode: one
-  player's device hosts and the server relays. Dedicated headless Godot match
-  servers can come later for games that need them, without changing the API.
+  player's device hosts and the server relays. Godot games use nakama-godot's
+  multiplayer bridge in rooms named `<game>:<CODE>`, so LAN and online share
+  the same code; games that need the server to run the room use relay rooms.
+  Dedicated headless Godot match servers can come later for games that need
+  them, without changing the API.
 - **Scales by steps.** Everything on one machine first; then the database on
   its own machine (`role=database` and `role=api`), or a managed PostgreSQL;
   big files always go to object storage, never through Nakama.

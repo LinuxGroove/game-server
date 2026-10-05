@@ -77,11 +77,51 @@ namespace Rooms {
     }
   }
 
-  export function requireRooms(game: Registry.GameDef): Registry.RoomsDef {
+  /** Rooms run by the server (core.room_*), as opposed to bridge rooms. */
+  export function requireRelay(game: Registry.GameDef): Registry.RoomsDef {
     if (!game.rooms) {
       return Util.fail(Code.FAILED_PRECONDITION, "rooms_disabled: " + game.id + " has no online rooms");
     }
+    if (game.rooms.transport !== "relay") {
+      return Util.fail(
+        Code.FAILED_PRECONDITION,
+        "use_named_rooms: " + game.id + " rooms are Nakama matches named " + game.id + ":<CODE>",
+      );
+    }
     return game.rooms;
+  }
+
+  export interface Roster {
+    /** The room's host, or "" when the server can't know it. */
+    host: string;
+    /** Players who may be credited with a result. */
+    members: string[];
+    /** Players in the room right now. */
+    present: string[];
+  }
+
+  /** Who is in a room of either kind, for checking result reports. */
+  export function roster(nk: nkruntime.Nakama, game: Registry.GameDef, matchId: string): Roster {
+    if (Bridge.isRelayedId(matchId)) {
+      const uuid = Bridge.uuidOf(matchId);
+      const room = Bridge.remembered(nk, uuid);
+      const present = Bridge.members(nk, uuid);
+      if ((room && room.game !== game.id) || present.length === 0) {
+        return Util.fail(Code.NOT_FOUND, "room_not_found: the room has closed");
+      }
+      // Rooms opened by name remember their host; matchmaker rooms don't.
+      return { host: room ? room.host : "", members: present, present: present };
+    }
+    let info: any;
+    try {
+      info = JSON.parse(nk.matchSignal(matchId, JSON.stringify({ op: "roster" })));
+    } catch (e) {
+      return Util.fail(Code.NOT_FOUND, "room_not_found: the room has closed");
+    }
+    if (!info || info.game !== game.id) {
+      return Util.fail(Code.NOT_FOUND, "room_not_found: not a " + game.name + " room");
+    }
+    return { host: info.host_user_id || "", members: info.seen || [], present: info.present || [] };
   }
 }
 
@@ -89,7 +129,7 @@ namespace Rooms {
 function rpcRoomCreate(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkruntime.Nakama, payload: string): string {
   const userId = Util.requireUser(ctx);
   const game = Registry.forSession(ctx);
-  const rooms = Rooms.requireRooms(game);
+  const rooms = Rooms.requireRelay(game);
   const req = Util.parsePayload(payload);
   const maxPlayers = Util.int(req, "max_players", rooms.minPlayers, rooms.maxPlayers, rooms.maxPlayers);
   const listed = Util.bool(req, "listed", false);
@@ -106,7 +146,7 @@ function rpcRoomCreate(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkr
 function rpcRoomFind(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkruntime.Nakama, payload: string): string {
   const userId = Util.requireUser(ctx);
   const game = Registry.forSession(ctx);
-  Rooms.requireRooms(game);
+  Rooms.requireRelay(game);
   const req = Util.parsePayload(payload);
   const code = Util.normaliseCode(Util.str(req, "code", 16, true));
   if (!Util.isCode(code, Rooms.CODE_LENGTH)) {
@@ -124,7 +164,7 @@ function rpcRoomFind(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkrun
 function rpcRoomList(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkruntime.Nakama, payload: string): string {
   Util.requireUser(ctx);
   const game = Registry.forSession(ctx);
-  Rooms.requireRooms(game);
+  Rooms.requireRelay(game);
   const req = Util.parsePayload(payload);
   const limit = Util.int(req, "limit", 1, 50, 20);
   const matches = nk.matchList(limit, true, null, null, null, "+label.game:" + game.id + " +label.listed:T +label.open:T");
@@ -146,6 +186,10 @@ function matchmakerMatched(
     return;
   }
   const game = Registry.find(ctx, matches[0].properties["game"] || "");
+  if (game && game.rooms && game.rooms.transport === "bridge") {
+    // Bridge games play in a relayed match; Nakama hands out join tokens.
+    return;
+  }
   if (!game || !game.rooms || !game.rooms.matchmaking) {
     logger.warn("Matchmaker result without a known game, falling back to a relayed match");
     return;

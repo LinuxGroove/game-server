@@ -67,15 +67,24 @@ namespace Registry {
   }
 
   export interface RoomsDef {
+    /**
+     * "bridge": Nakama relayed matches named "<game>:<CODE>", for Godot games
+     * using nakama-godot's NakamaMultiplayerBridge (Godot's high-level
+     * multiplayer API, the same game code as LAN). The server checks names,
+     * room size and who created each room; the host election is the bridge's.
+     * "relay": server-run "relay" matches with join codes from core.room_*,
+     * public listing, locking and kicks (see relay.ts).
+     */
+    transport: "bridge" | "relay";
     minPlayers: number;
     maxPlayers: number;
-    /** Relay ticks per second. Messages are forwarded once per tick. */
+    /** Relay ticks per second. Messages are forwarded once per tick. (relay) */
     tickRate: number;
     /**
      * "host": one player is the authority. Others can only send to the host,
      * and the room closes if the host is gone longer than hostGraceSec.
      * "broadcast": anyone may send to anyone, and the host role (room
-     * settings only) moves to another player when the host leaves.
+     * settings only) moves to another player when the host leaves. (relay)
      */
     mode: "host" | "broadcast";
     matchmaking: boolean;
@@ -244,6 +253,9 @@ namespace Registry {
         }
         if (r.tickRate < 1 || r.tickRate > 60) {
           errors.push(where + "rooms tickRate must be 1 to 60");
+        }
+        if (r.transport !== "bridge" && r.transport !== "relay") {
+          errors.push(where + "rooms transport must be bridge or relay");
         }
       }
     }

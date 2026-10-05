@@ -14,7 +14,7 @@ and the server keeps each game's data in its own namespace:
 | Leaderboards | `<game>.<board>` | `lantern-out.wins` |
 | Storage collections | `<game>.<name>` | `lantern-out.progress` |
 | Blob object keys | `<game>/<kind>/<user id>/<blob id>` | `sandbox/ghost/…/…` |
-| Rooms | label field `game` | `{"game": "lantern-out", …}` |
+| Rooms | match name, or label field `game` | `lantern-out:QX7K2M` |
 | Game RPCs | `<game>.<name>` | `lantern-out.round_report` |
 | Shared RPCs | `core.<name>` | `core.config` |
 
@@ -105,6 +105,8 @@ Match on the part before the colon. Reasons:
 | `bad_code` | 400 | Code is the wrong length or has bad characters |
 | `rooms_disabled`, `matchmaking_disabled`, `chat_disabled` | 400/403 | The game doesn't use that feature |
 | `room_not_found` | 404 | No open room with that code |
+| `bad_room_name`, `room_full` | (socket) | Bridge room refused, see [Bridge rooms](#bridge-rooms) |
+| `use_room_rpcs`, `use_named_rooms` | 400 / (socket) | Wrong kind of room for this game |
 | `confirm_required` | 400 | `core.account_delete` needs `{"confirm": "DELETE"}` |
 | `wrong_game`, `not_host`, `not_in_room` | 403/400 | Game module checks (see the game's section) |
 | `already_reported` | 409 | That round was already recorded |
@@ -132,13 +134,15 @@ var config: Dictionary = JSON.parse_string(res.payload)
     "collections": [{"id": "lantern-out.progress", "name": "progress", "client_write": true, "max_bytes": 32768, "read": "owner"}],
     "blobs": [],
     "shares": [],
-    "rooms": {"min_players": 4, "max_players": 10, "mode": "host", "matchmaking": true, "tick_rate": 20, "first_game_opcode": 100}
+    "rooms": {"transport": "bridge", "min_players": 4, "max_players": 10, "matchmaking": true, "room_name_prefix": "lantern-out:"}
   }
 }
 ```
 
 `motd` is a message of the day the admin sets per game. `blobs` is empty when
-the server has no object storage.
+the server has no object storage. For relay rooms, `rooms` has `"transport":
+"relay"` with `mode`, `tick_rate` and `first_game_opcode` instead of
+`room_name_prefix`.
 
 ## Storage (saves, profiles, settings)
 
@@ -218,11 +222,47 @@ object storage and these calls return `blobs_disabled`.
 ## Online rooms
 
 Online play works like LAN play: one player's device is the **host** and runs
-the game, and the server relays messages between the host and everyone else
-(an authoritative "relay" match). The server decides who may join, assigns
-each player a slot number, and keeps the room's code and listing up to date.
+the game, and the server passes messages between players. A game uses one of
+two kinds of room, set in its definition and reported by `core.config` as
+`features.rooms.transport`:
 
-### Getting into a room
+| | Bridge rooms (`bridge`) | Relay rooms (`relay`) |
+| --- | --- | --- |
+| Client | nakama-godot's `NakamaMultiplayerBridge`: Godot's high-level multiplayer (`rpc`, `MultiplayerSynchronizer`) with the same code as LAN | Raw match messages with the protocol below |
+| Room codes | Chosen by the client, room named `<game>:<CODE>` | Issued by the server, `core.room_create` |
+| Host | First player in (the bridge decides) | The room's creator |
+| Server checks | Name, game, room size, who opened the room | Also locking, kicks, public listing, host-only messages |
+| Used by | Lantern Out | Sandbox |
+
+### Bridge rooms
+
+The game picks a code (4–16 capital letters and digits) and every player,
+host included, joins the room named `<game>:<CODE>`:
+
+```gdscript
+var bridge := NakamaMultiplayerBridge.new(socket)
+bridge.match_join_error.connect(_on_join_error)
+bridge.match_joined.connect(_on_joined)
+bridge.join_named_match("lantern-out:" + code)
+multiplayer.multiplayer_peer = bridge.multiplayer_peer
+```
+
+The first player in becomes the host (peer 1). Quick match uses
+`bridge.start_matchmaking(ticket)` with a ticket from
+`socket.add_matchmaker_async(...)`; the server keeps tickets inside the game.
+
+The server refuses `bad_room_name` (wrong game prefix, bad code, or an unnamed
+`create_match()`), `room_full` (the game's `max_players` reached; players
+already in can rejoin) and `use_room_rpcs` (the game uses relay rooms). A code
+that nobody is using simply opens a new, empty room, so the joiner becomes its
+host; check the player count after joining if the game needs a host to be
+there already.
+
+### Relay rooms
+
+The server runs the room (an authoritative "relay" match): it decides who may
+join, assigns each player a slot number, and keeps the room's code and listing
+up to date.
 
 - **Invite code.** The host calls `core.room_create {"max_players"?, "listed"?, "meta"?}`
   → `{"match_id", "code"}` and joins `match_id` straight away (the room closes
@@ -243,9 +283,10 @@ var match := await socket.join_match_async(room["match_id"])
 ```
 
 Joining can fail with `room_full`, `room_locked`, `room_closing`, `kicked`,
-`not_invited` (matchmaker rooms are reserved) or `wrong_game`.
+`not_invited` (matchmaker rooms are reserved) or `wrong_game`. The `core.room_*`
+calls return `use_named_rooms` for games that use bridge rooms.
 
-### Messages
+#### Messages
 
 Game messages use opcodes **100 and up**. Their data starts with a small
 target header, then the game's own bytes:
@@ -277,7 +318,7 @@ socket.send_match_state_raw_async(match_id, 100, relay_packet([3], role_bytes))
 Messages are forwarded once per server tick (the game's tick rate), so keep
 them to state changes and inputs, not per-frame streams.
 
-### Control messages (opcodes 1–99, JSON)
+#### Control messages (opcodes 1–99, JSON)
 
 From the server:
 
@@ -316,8 +357,8 @@ player as JSON. Offer both in the game's settings.
 
 ## Lantern Out
 
-Game id `lantern-out`. Rooms: 4–10 players, `host` mode, 20 ticks per second,
-quick match on, 20 seconds of host grace. No free-text chat.
+Game id `lantern-out`. Bridge rooms named `lantern-out:<CODE>` for 4–10
+players, with quick match. No free-text chat.
 
 | Collection | Client writes | Read | Max | Use |
 | --- | --- | --- | --- | --- |
@@ -329,11 +370,11 @@ Leaderboards (server-written): `lantern-out.wins` (all time) and
 `lantern-out.wins_weekly` (resets Monday 00:00 UTC).
 
 The host's device keeps every secret role and sends each player only what that
-player may see, using targeted messages. When a round ends, the host reports it:
+player may see (`rpc_id` to one peer). When a round ends, the host reports it:
 
 ```
 lantern-out.round_report {
-  "match_id": "<room match id>",
+  "match_id": "<bridge.match_id>",
   "round": 3,
   "winner": "village",
   "players": [{"user_id": "...", "team": "village", "survived": true}, ...]
@@ -341,10 +382,12 @@ lantern-out.round_report {
 -> {"recorded": 7}
 ```
 
-The server checks that the caller is the room's current host, every listed
-player has been in the room, and the round number wasn't already reported,
-then updates each player's stats and the winners' leaderboard records. `team`
-and `winner` are `village` or `hollow`.
+`players` lists signed-in players only, not bots. The server checks the room
+is a Lantern Out room, the caller opened it (for rooms joined by code; in
+quick-match rooms, any player in the room may report), every listed player is
+in the room now, and the round number wasn't already reported. Then it updates
+each player's stats and the winners' leaderboard records. `team` and `winner`
+are `village` or `hollow`.
 
 ## Sandbox test game
 
@@ -352,6 +395,6 @@ Game id `sandbox`, off unless the server enables it (the Compose setup and CI
 do). It has one of everything, for trying the API without touching real game
 data: boards `score` (client submit, best), `time_ms` (ascending, daily reset)
 and `server_only`; collections `notes` (public allowed) and `private`; blob
-kind `ghost` (64 KB, `application/octet-stream`); share kind `level`; rooms of
-2–4 players in `host` mode with quick match. `scripts/smoke-test.mjs` shows
-every call in use.
+kind `ghost` (64 KB, `application/octet-stream`); share kind `level`; relay
+rooms of 2–4 players in `host` mode with quick match. `scripts/smoke-test.mjs`
+shows every call in use.

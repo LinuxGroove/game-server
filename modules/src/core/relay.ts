@@ -315,8 +315,8 @@ function relayMatchInit(
   params: { [key: string]: any },
 ): { state: Relay.State; tickRate: number; label: string } {
   const game = Registry.find(ctx, String(params["game"] || ""));
-  if (!game || !game.rooms) {
-    throw new Error("relay match created for a game without rooms: " + params["game"]);
+  if (!game || !game.rooms || game.rooms.transport !== "relay") {
+    throw new Error("relay match created for a game without relay rooms: " + params["game"]);
   }
   const rooms = game.rooms;
   const maxPlayers = Math.min(Number(params["max_players"]) || rooms.maxPlayers, rooms.maxPlayers);

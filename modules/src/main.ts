@@ -41,7 +41,9 @@ function InitModule(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkrunt
   initializer.registerRpc("core.account_delete", rpcAccountDelete);
   initializer.registerRpc("core.account_export", rpcAccountExport);
 
-  // Online rooms.
+  // Online rooms: named bridge rooms (Nakama relayed matches) and relay rooms.
+  initializer.registerRtBefore("MatchCreate", beforeMatchCreate);
+  initializer.registerRtBefore("MatchJoin", beforeMatchJoin);
   initializer.registerMatch("relay", {
     matchInit: relayMatchInit,
     matchJoinAttempt: relayMatchJoinAttempt,
