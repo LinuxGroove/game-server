@@ -89,5 +89,6 @@ restore, splitting the database onto its own machine, updates and monitoring.
 
 ## License
 
-Apache-2.0. Nakama is Apache-2.0, PostgreSQL is under the PostgreSQL License,
-and Caddy is Apache-2.0.
+Copyright (c) 2026 The LinuxGroove team. Licensed under Apache-2.0 (see
+[LICENSE](LICENSE) and [NOTICE](NOTICE)). Nakama is Apache-2.0, PostgreSQL is
+under the PostgreSQL License, and Caddy is Apache-2.0.

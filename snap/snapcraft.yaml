@@ -107,6 +107,9 @@ parts:
       npm ci --no-audit --no-fund
       npm run build
       install -D -m 0644 build/index.js "$CRAFT_PART_INSTALL/modules/index.js"
+      for f in LICENSE NOTICE; do
+        install -D -m 0644 "$CRAFT_PROJECT_DIR/$f" "$CRAFT_PART_INSTALL/usr/share/doc/linuxgroove-game-server/$f"
+      done
 
   nakama:
     plugin: nil

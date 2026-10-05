@@ -73,6 +73,7 @@ jobs:
         run: |
           sudo snap install --dangerous "${{ steps.build.outputs.snap }}"
           snap info --verbose linuxgroove-game-server | grep -E '^(name|confinement)'
+          grep -q "The LinuxGroove team" /snap/linuxgroove-game-server/current/usr/share/doc/linuxgroove-game-server/NOTICE
       - name: Wait for the server
         run: |
           for i in $(seq 1 90); do

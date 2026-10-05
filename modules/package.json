@@ -4,6 +4,7 @@
   "private": true,
   "description": "Nakama runtime modules shared by every LinuxGroove game",
   "license": "Apache-2.0",
+  "author": "The LinuxGroove team",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "npm run build && node --test \"test/*.test.mjs\"",

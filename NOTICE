@@ -1,0 +1,8 @@
+LinuxGroove game server
+Copyright (c) 2026 The LinuxGroove team
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+The snap also bundles Nakama (Apache-2.0, The Nakama Authors), PostgreSQL
+(PostgreSQL License, The PostgreSQL Global Development Group) and Caddy
+(Apache-2.0, Matthew Holt and The Caddy Authors), each under its own license.
