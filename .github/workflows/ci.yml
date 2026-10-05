@@ -1,0 +1,151 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  modules:
+    name: Modules and scripts
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: modules/package-lock.json
+      - name: Build and unit test the server modules
+        working-directory: modules
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+      - name: Lint the snap's shell scripts
+        run: shellcheck -x -e SC1091 -s bash snap/hooks/* snap/local/*
+
+  compose:
+    name: Docker Compose end to end
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build the server modules
+        working-directory: modules
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Start PostgreSQL and Nakama
+        run: docker compose -f deploy/compose/compose.yaml up -d --wait
+      - name: Smoke test
+        run: node scripts/smoke-test.mjs
+      - name: Server logs
+        if: failure()
+        run: docker compose -f deploy/compose/compose.yaml logs
+      - name: Stop
+        if: always()
+        run: docker compose -f deploy/compose/compose.yaml down -v
+
+  snap:
+    name: Snap build, install and end to end
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: snapcore/action-build@v1
+        id: build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: snap-amd64
+          path: ${{ steps.build.outputs.snap }}
+          retention-days: 14
+
+      - name: Install the snap (strict confinement)
+        run: |
+          sudo snap install --dangerous "${{ steps.build.outputs.snap }}"
+          snap info --verbose linuxgroove-game-server | grep -E '^(name|confinement)'
+      - name: Wait for the server
+        run: |
+          for i in $(seq 1 90); do
+            if curl -sf http://127.0.0.1:7350/healthcheck; then exit 0; fi
+            sleep 2
+          done
+          exit 1
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+      - name: Start an S3-compatible store for blob tests
+        run: |
+          go install github.com/versity/versitygw/cmd/versitygw@v1.8.0
+          mkdir -p "$RUNNER_TEMP/s3/games"
+          nohup "$(go env GOPATH)/bin/versitygw" --access ci-access --secret ci-secret-key \
+            --port 127.0.0.1:7070 posix "$RUNNER_TEMP/s3" > "$RUNNER_TEMP/s3.log" 2>&1 &
+
+      - name: Configure through snap settings
+        run: |
+          echo -n ci-secret-key | sudo linuxgroove-game-server.secret set s3-secret-access-key
+          # The configure hook restarts Nakama because its settings changed.
+          sudo snap set linuxgroove-game-server \
+            games.sandbox.enabled=true \
+            blobs.endpoint=http://127.0.0.1:7070 \
+            blobs.bucket=games \
+            blobs.access-key-id=ci-access
+          for i in $(seq 1 90); do
+            if curl -sf http://127.0.0.1:7350/healthcheck; then break; fi
+            sleep 2
+          done
+          sudo snap services linuxgroove-game-server
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Smoke test, including blob uploads
+        run: BLOB_TEST=1 node scripts/smoke-test.mjs
+      - name: Admin commands
+        run: |
+          sudo linuxgroove-game-server.info
+          sudo linuxgroove-game-server.backup
+          sudo ls -l /var/snap/linuxgroove-game-server/common/backups
+          echo 'SELECT count(*) AS users FROM users;' | sudo linuxgroove-game-server.psql
+      - name: Bad settings are refused
+        run: |
+          if sudo snap set linuxgroove-game-server role=api; then
+            echo "role=api without a database-url should be refused"; exit 1
+          fi
+          if sudo snap set linuxgroove-game-server games.lantern-out.colour=red; then
+            echo "unknown game settings should be refused"; exit 1
+          fi
+      - name: Survives a refresh and a restart
+        run: |
+          before=$(sudo sh -c 'ls /var/snap/linuxgroove-game-server/common/backups | wc -l')
+          # Installing the same file again is a refresh to a new revision.
+          sudo snap install --dangerous "${{ steps.build.outputs.snap }}"
+          after=$(sudo sh -c 'ls /var/snap/linuxgroove-game-server/common/backups | wc -l')
+          echo "Backups before refresh: $before, after: $after"
+          if [ "$after" -le "$before" ]; then
+            echo "The pre-refresh hook should have made a backup"; exit 1
+          fi
+          sudo snap restart linuxgroove-game-server
+          for i in $(seq 1 90); do
+            if curl -sf http://127.0.0.1:7350/healthcheck; then break; fi
+            sleep 2
+          done
+          BLOB_TEST=1 node scripts/smoke-test.mjs
+
+      - name: Snap logs and confinement denials
+        if: failure()
+        run: |
+          sudo snap services linuxgroove-game-server || true
+          sudo snap logs -n=all linuxgroove-game-server || true
+          sudo journalctl -k --no-pager | grep -E 'apparmor="DENIED"|audit: type=1326' | tail -50 || true
+          cat "$RUNNER_TEMP/s3.log" || true

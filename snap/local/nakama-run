@@ -1,0 +1,9 @@
+#!/bin/bash
+# Runs as snap_daemon (started by launch-nakama): apply any pending database
+# migrations for this Nakama version, then run Nakama in the foreground.
+set -euo pipefail
+
+configs=(--config "$SNAP/config/nakama.yml" --config "$SNAP_DATA/nakama/config.yml")
+
+"$SNAP/bin/nakama" migrate up "${configs[@]}"
+exec "$SNAP/bin/nakama" "${configs[@]}"

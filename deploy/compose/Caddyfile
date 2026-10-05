@@ -1,0 +1,8 @@
+{
+	admin off
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy nakama:7350
+}

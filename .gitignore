@@ -1,0 +1,7 @@
+node_modules/
+modules/build/
+*.snap
+/parts/
+/stage/
+/prime/
+deploy/compose/.env

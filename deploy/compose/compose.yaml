@@ -1,0 +1,91 @@
+# Local development and CI: PostgreSQL + Nakama with the modules from this
+# repo. Production servers should use the snap (see docs/operations.md);
+# this file is also a starting point for container-based community servers.
+#
+#   (cd modules && npm ci && npm run build)
+#   docker compose -f deploy/compose/compose.yaml up -d --wait
+#   node scripts/smoke-test.mjs
+#
+# Every secret has a development default. Copy .env.example to .env and set
+# real values before exposing this anywhere.
+
+name: game-server
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: nakama
+      POSTGRES_USER: nakama
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-localdev}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "nakama", "-d", "nakama"]
+      interval: 2s
+      retries: 30
+    restart: unless-stopped
+
+  nakama:
+    image: heroiclabs/nakama:3.41.0
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        DB="nakama:$${POSTGRES_PASSWORD}@postgres:5432/nakama?sslmode=disable"
+        /nakama/nakama migrate up --config /nakama/config/nakama.yml --database.address "$$DB"
+        exec /nakama/nakama --config /nakama/config/nakama.yml \
+          --database.address "$$DB" \
+          --runtime.path /nakama/modules \
+          --socket.server_key "$${SERVER_KEY}" \
+          --session.encryption_key "$${SESSION_ENCRYPTION_KEY}" \
+          --session.refresh_encryption_key "$${SESSION_REFRESH_ENCRYPTION_KEY}" \
+          --console.username operator \
+          --console.password "$${CONSOLE_PASSWORD}" \
+          --console.signing_key "$${CONSOLE_SIGNING_KEY}" \
+          --runtime.http_key "$${RUNTIME_HTTP_KEY}" \
+          --runtime.env "GAME_SANDBOX_ENABLED=$${GAME_SANDBOX_ENABLED}" \
+          --logger.format "$${LOG_FORMAT}"
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-localdev}
+      SERVER_KEY: ${SERVER_KEY:-defaultkey}
+      SESSION_ENCRYPTION_KEY: ${SESSION_ENCRYPTION_KEY:-localdev-session-key}
+      SESSION_REFRESH_ENCRYPTION_KEY: ${SESSION_REFRESH_ENCRYPTION_KEY:-localdev-refresh-key}
+      CONSOLE_PASSWORD: ${CONSOLE_PASSWORD:-localdev-password}
+      CONSOLE_SIGNING_KEY: ${CONSOLE_SIGNING_KEY:-localdev-console-key}
+      RUNTIME_HTTP_KEY: ${RUNTIME_HTTP_KEY:-localdev-http-key}
+      GAME_SANDBOX_ENABLED: ${GAME_SANDBOX_ENABLED:-true}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+    volumes:
+      - ../../config/nakama.yml:/nakama/config/nakama.yml:ro
+      - ../../modules/build:/nakama/modules:ro
+    ports:
+      - "${API_BIND:-127.0.0.1}:7350:7350"
+      - "127.0.0.1:7351:7351"
+    healthcheck:
+      test: ["CMD", "/nakama/nakama", "healthcheck"]
+      interval: 2s
+      retries: 30
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # HTTPS in front of Nakama: DOMAIN=api.example.org docker compose --profile https up -d
+  caddy:
+    image: caddy:2
+    profiles: [https]
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [nakama]
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  caddy_data:

@@ -1,0 +1,17 @@
+#!/bin/bash
+# Generate secrets and publish the default settings so `snap get` shows them.
+. "$SNAP/bin/common.sh"
+
+ensure_secrets
+snapctl set \
+  role=all \
+  server-key=defaultkey \
+  api.port=7350 \
+  console.address=127.0.0.1 \
+  console.port=7351 \
+  postgres.listen-address=127.0.0.1 \
+  postgres.port=5432 \
+  log-level=info \
+  metrics.port=0 \
+  backup.enabled=true \
+  backup.keep-days=7

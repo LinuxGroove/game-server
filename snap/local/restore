@@ -1,0 +1,25 @@
+#!/bin/bash
+# Restore the bundled database from a dump made by `backup`.
+#   sudo snap stop linuxgroove-game-server.nakama
+#   sudo linuxgroove-game-server.restore /var/snap/linuxgroove-game-server/common/backups/nakama-<stamp>.dump
+#   sudo snap start linuxgroove-game-server.nakama
+. "$SNAP/bin/common.sh"
+
+dump="${1:-}"
+if [ -z "$dump" ] || [ ! -f "$dump" ]; then
+  echo "usage: restore <dump file in $BACKUP_DIR>" >&2
+  exit 2
+fi
+if ! uses_bundled_db; then
+  echo "This node uses an external database; restore it where it runs." >&2
+  exit 1
+fi
+wait_for_postgres
+if [ "$(psql_admin -d postgres -tAc "SELECT count(*) FROM pg_stat_activity WHERE datname = 'nakama' AND usename = 'nakama'")" != "0" ]; then
+  echo "Nakama is still connected. Stop it first: sudo snap stop $SNAP_INSTANCE_NAME.nakama" >&2
+  exit 1
+fi
+
+PGPASSWORD="$(secret_get postgres-password)" "$PG_BIN/pg_restore" -h 127.0.0.1 -p "$(db_port)" -U postgres \
+  --clean --if-exists --no-owner --role=nakama --dbname=nakama --exit-on-error "$dump"
+echo "Restored $dump. Start Nakama again: sudo snap start $SNAP_INSTANCE_NAME.nakama"

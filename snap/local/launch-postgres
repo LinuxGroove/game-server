@@ -1,0 +1,56 @@
+#!/bin/bash
+# Service: the bundled PostgreSQL, run as snap_daemon.
+# Skipped when this node uses an external database (role=api or database-url).
+. "$SNAP/bin/common.sh"
+
+if ! uses_bundled_db; then
+  log "Not using the bundled PostgreSQL on this node (role=$(role))."
+  exit 0
+fi
+
+ensure_secrets
+mkdir -p "$SNAP_COMMON/postgresql"
+daemon_dir "$SNAP_COMMON/postgresql/$PG_MAJOR" 0700
+
+# The data directory is snap_daemon's alone, so root asks snap_daemon to look
+# in it. initdb reads the superuser password from a file that snap_daemon
+# writes, uses and removes itself.
+if ! as_daemon test -f "$PGDATA/PG_VERSION"; then
+  log "Initialising PostgreSQL $PG_MAJOR in $PGDATA"
+  pwfile="$SNAP_COMMON/postgresql/$PG_MAJOR/.initdb-password"
+  # shellcheck disable=SC2016 # $1 expands in the inner shell
+  secret_get postgres-password | as_daemon sh -c 'umask 077 && cat >"$1"' sh "$pwfile"
+  if ! as_daemon "$PG_BIN/initdb" -D "$PGDATA" -U postgres --pwfile="$pwfile" \
+    --auth-local=reject --auth-host=scram-sha-256 \
+    -E UTF8 --locale=C.UTF-8 --data-checksums >&2; then
+    as_daemon rm -f "$pwfile"
+    exit 1
+  fi
+  as_daemon rm -f "$pwfile"
+fi
+
+mem_kb="$(awk '/^MemTotal:/ { print $2 }' /proc/meminfo)"
+mem_mb=$((mem_kb / 1024))
+# Defaults follow the hosting plan: a quarter of RAM for shared buffers,
+# capped at 8 GB, and about 60% as the planner's cache estimate.
+auto_sb=$((mem_mb / 4))
+if [ "$auto_sb" -gt 8192 ]; then auto_sb=8192; fi
+if [ "$auto_sb" -lt 128 ]; then auto_sb=128; fi
+auto_ecs=$((mem_mb * 6 / 10))
+
+listen="$(cfg postgres.listen-address 127.0.0.1)"
+if [ "$listen" != "127.0.0.1" ] && [ "$listen" != "localhost" ]; then
+  listen="127.0.0.1,$listen"
+fi
+
+PG_LISTEN="$listen"
+PG_PORT="$(db_port)"
+PG_SHARED_BUFFERS="$(cfg postgres.shared-buffers "${auto_sb}MB")"
+PG_EFFECTIVE_CACHE="$(cfg postgres.effective-cache-size "${auto_ecs}MB")"
+PG_MAX_CONNECTIONS="$(cfg postgres.max-connections 100)"
+PG_ALLOWED_CIDRS="$(cfg postgres.allowed-cidrs)"
+export PG_LISTEN PG_PORT PG_SHARED_BUFFERS PG_EFFECTIVE_CACHE PG_MAX_CONNECTIONS PG_ALLOWED_CIDRS
+export PGDATA PG_BIN PG_MAJOR
+export HOME="$SNAP_COMMON/postgresql/$PG_MAJOR"
+
+exec setpriv --clear-groups --reuid "$DAEMON_UID" --regid "$DAEMON_UID" -- "$SNAP/bin/postgres-run"
