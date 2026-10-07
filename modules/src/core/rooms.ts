@@ -143,10 +143,19 @@ function rpcRoomCreate(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkr
   return JSON.stringify({ match_id: room.matchId, code: room.code });
 }
 
-/** core.room_find {code} -> {match_id, code, players, max_players, open, mode, meta} */
+/**
+ * core.room_find {code} -> {match_id, code, players, max_players, open, mode, meta}
+ *
+ * Bridge games call it before joining by name: joining a name nobody is in
+ * opens a new room, so a mistyped code would otherwise make a room (and a
+ * host) out of the typo.
+ */
 function rpcRoomFind(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkruntime.Nakama, payload: string): string {
   const userId = Util.requireUser(ctx);
   const game = Registry.forSession(ctx);
+  if (game.rooms && game.rooms.transport === "bridge") {
+    return findBridgeRoom(nk, game, game.rooms, userId, Util.parsePayload(payload));
+  }
   Rooms.requireRelay(game);
   const req = Util.parsePayload(payload);
   const code = Util.normaliseCode(Util.str(req, "code", 16, true));
@@ -159,6 +168,36 @@ function rpcRoomFind(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkrun
     return Util.fail(Code.NOT_FOUND, "room_not_found: no open room with code " + code);
   }
   return JSON.stringify(Rooms.describe(match));
+}
+
+/** A bridge room is there while players are in it and its host hasn't left. */
+function findBridgeRoom(
+  nk: nkruntime.Nakama,
+  game: Registry.GameDef,
+  rooms: Registry.RoomsDef,
+  userId: string,
+  req: { [key: string]: any },
+): string {
+  const code = Util.normaliseCode(Util.str(req, "code", 16, true));
+  if (!Bridge.CODE_PATTERN.test(code)) {
+    return Util.fail(Code.INVALID_ARGUMENT, "bad_code: room codes are 4-16 capital letters and digits");
+  }
+  RateLimit.check(nk, userId, "room_find", 30, 60);
+  const uuid = Uuid.v5dns(game.id + ":" + code);
+  const users = Bridge.members(nk, uuid);
+  const room = Bridge.remembered(nk, uuid);
+  if (users.length === 0 || (room && users.indexOf(room.host) < 0)) {
+    return Util.fail(Code.NOT_FOUND, "room_not_found: no open room with code " + code);
+  }
+  return JSON.stringify({
+    match_id: uuid + ".",
+    code: code,
+    players: users.length,
+    max_players: rooms.maxPlayers,
+    open: users.length < rooms.maxPlayers,
+    mode: "",
+    meta: {},
+  });
 }
 
 /** core.room_list {limit?} -> {rooms: [...]} (listed rooms with free seats) */

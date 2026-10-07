@@ -256,8 +256,11 @@ The server refuses `bad_room_name` (wrong game prefix, bad code, or an unnamed
 `create_match()`), `room_full` (the game's `max_players` reached; players
 already in can rejoin) and `use_room_rpcs` (the game uses relay rooms). A code
 that nobody is using simply opens a new, empty room, so the joiner becomes its
-host; check the player count after joining if the game needs a host to be
-there already.
+host. Guests should look the code up first with
+`core.room_find {"code"}` → `{"match_id", "code", "players", "max_players", "open"}`,
+which answers `room_not_found` (without opening a room) when nobody is in it
+or the player who opened it has left. A room can still empty between the
+lookup and the join, so also check that you aren't peer 1 after joining.
 
 ### Relay rooms
 
@@ -285,7 +288,8 @@ var match := await socket.join_match_async(room["match_id"])
 
 Joining can fail with `room_full`, `room_locked`, `room_closing`, `kicked`,
 `not_invited` (matchmaker rooms are reserved) or `wrong_game`. The `core.room_*`
-calls return `use_named_rooms` for games that use bridge rooms.
+calls other than `core.room_find` return `use_named_rooms` for games that use
+bridge rooms.
 
 #### Messages
 

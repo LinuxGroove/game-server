@@ -442,8 +442,13 @@ async function main() {
     const name = "graveyard-hollow:" + code();
     const players = [];
     for (let i = 0; i < 3; i++) players.push(await new Socket(await login("graveyard-hollow", "0.1.0")).connect());
+    // Guests look a code up first; asking about an empty one opens nothing.
+    await expectError(rpc(players[1].player, "core.room_find", { code: name.split(":")[1] }), 404, "room_not_found");
     const first = await createNamed(players[0], name);
     assert.equal(first.size, 1);
+    const found = await eventually(() => rpc(players[1].player, "core.room_find", { code: name.split(":")[1].toLowerCase() }));
+    assert.equal(found.match_id, first.match_id);
+    assert.equal(found.players, 1);
     assert.ok(!first.presences || first.presences.length === 0, "the first player sees an empty room and hosts");
     const second = await createNamed(players[1], name);
     assert.equal(second.match_id, first.match_id);

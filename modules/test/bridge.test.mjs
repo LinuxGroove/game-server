@@ -155,3 +155,32 @@ test("graveyard-hollow round reports in bridge rooms come from the room's host",
   assert.deepEqual(written.sort(), ["graveyard-hollow.wins/a", "graveyard-hollow.wins_weekly/a"]);
   assert.equal(reason(() => report("host", players)), "already_reported");
 });
+
+test("core.room_find tells a guest whether a bridge room is open", () => {
+  const nk = bridgeNk();
+  const find = (code, userId = "guest", vars = GRAVEYARD) =>
+    JSON.parse(g.rpcRoomFind(ctx(vars, { userId, env: SANDBOX_ENV }), logger, nk, JSON.stringify({ code })));
+  // Nobody hosts a mistyped code, and asking doesn't open a room.
+  assert.equal(reason(() => find("QX7K2M")), "room_not_found");
+  assert.equal(reason(() => find("qx-7k2m")), "room_not_found");
+  assert.equal(reason(() => find("Q!")), "bad_code");
+
+  create(nk, "graveyard-hollow:QX7K2M", "host");
+  nk.join("graveyard-hollow:QX7K2M", "host");
+  const room = find("qx-7k2m");
+  assert.equal(room.match_id, uuidv5dns("graveyard-hollow:QX7K2M") + ".");
+  assert.equal(room.code, "QX7K2M");
+  assert.equal(room.players, 1);
+  assert.equal(room.max_players, 10);
+  assert.equal(room.open, true);
+
+  // Another game's sessions look in their own namespace.
+  assert.equal(reason(() => find("QX7K2M", "u", { game: "foam-frenzy", version: "0.1.0" })), "room_not_found");
+
+  // Guests left behind by a host who has gone can't be joined.
+  create(nk, "graveyard-hollow:QX7K2M", "a");
+  nk.join("graveyard-hollow:QX7K2M", "a");
+  const list = nk.streamUserList({ mode: 5, subject: uuidv5dns("graveyard-hollow:QX7K2M") });
+  list.splice(list.findIndex((p) => p.userId === "host"), 1);
+  assert.equal(reason(() => find("QX7K2M")), "room_not_found");
+});
