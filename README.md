@@ -22,7 +22,8 @@ flowchart LR
 ## For game developers
 
 - [Game API](docs/game-api.md): logging in with a game id, errors, every
-  RPC, rooms and the relay protocol, and the Graveyard Hollow module.
+  RPC, rooms and the relay protocol, and the Graveyard Hollow and Foam Frenzy
+  modules.
 - [Adding a game](docs/adding-a-game.md): register a new game and its server
   logic.
 

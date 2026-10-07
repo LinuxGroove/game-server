@@ -136,7 +136,7 @@ sudo snap set linuxgroove-game-server \
 
 Give the key read, write and delete on that bucket only. Objects are keyed
 `<game>/<kind>/<user>/<id>`, so set retention with lifecycle rules per prefix
-(for example, expire `foam-frenzy/ghost/` after 90 days). The bucket's CORS
+(for example, expire `toybox-grand-prix/ghost/` after 90 days). The bucket's CORS
 rules don't matter for native games.
 
 ## Backups and restore

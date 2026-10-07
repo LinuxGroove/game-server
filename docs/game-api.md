@@ -110,6 +110,7 @@ Match on the part before the colon. Reasons:
 | `use_room_rpcs`, `use_named_rooms` | 400 / (socket) | Wrong kind of room for this game |
 | `confirm_required` | 400 | `core.account_delete` needs `{"confirm": "DELETE"}` |
 | `wrong_game`, `not_host`, `not_in_room` | 403/400 | Game module checks (see the game's section) |
+| `too_many_winners` | 400 | A single-winner Foam Frenzy mode reported more than one winner |
 | `already_reported` | 409 | That round was already recorded |
 
 ## core.config
@@ -428,8 +429,11 @@ foam-frenzy.match_report {
 
 `players` lists each device's signed-in player, not bots or couch guests.
 `mode` is `ffa`, `teams`, `ctf` or `hoarder`; `tags` and `outs` are 0–500 and
-`captures` 0–100. The server makes the same checks as for Graveyard Hollow
-round reports, then updates each player's stats and the leaderboards.
+`captures` 0–100, counted only in `ctf`. In `ffa` and `hoarder` at most one
+player has `won` (none for a tie), or the report is refused with
+`too_many_winners`; in `teams` and `ctf` every player on the winning team has
+it. The server makes the same checks as for Graveyard Hollow round reports,
+then updates each player's stats and the leaderboards.
 
 ## Sandbox test game
 
