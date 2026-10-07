@@ -41,6 +41,8 @@ namespace FoamFrenzy {
   export const STATS_KEY = "stats";
   /** Rules.MODE_KEYS in the game. */
   export const MODES = ["ffa", "teams", "ctf", "hoarder"];
+  /** Modes with one winner (or a tie); in the others a whole team wins. */
+  export const SOLO_MODES = ["ffa", "hoarder"];
 
   export interface ReportedPlayer {
     user_id: string;
@@ -50,12 +52,13 @@ namespace FoamFrenzy {
     won: boolean;
   }
 
-  export function parsePlayers(raw: any): ReportedPlayer[] {
+  export function parsePlayers(raw: any, mode: string): ReportedPlayer[] {
     if (!Array.isArray(raw) || raw.length < 1 || raw.length > GAME_FOAM_FRENZY.rooms!.maxPlayers) {
       return Util.fail(Code.INVALID_ARGUMENT, "players must list 1 to " + GAME_FOAM_FRENZY.rooms!.maxPlayers + " players");
     }
     const out: ReportedPlayer[] = [];
     const seen: { [id: string]: boolean } = {};
+    let winners = 0;
     for (let i = 0; i < raw.length; i++) {
       const p = raw[i];
       if (!p || typeof p !== "object") {
@@ -66,13 +69,19 @@ namespace FoamFrenzy {
         return Util.fail(Code.INVALID_ARGUMENT, "duplicate player " + userId);
       }
       seen[userId] = true;
+      const won = Util.bool(p, "won", false);
+      winners += won ? 1 : 0;
       out.push({
         user_id: userId,
         tags: Util.int(p, "tags", 0, FOAM_FRENZY_MAX_TAGS, 0),
         outs: Util.int(p, "outs", 0, FOAM_FRENZY_MAX_TAGS, 0),
-        captures: Util.int(p, "captures", 0, 100, 0),
-        won: Util.bool(p, "won", false),
+        // Flags only exist in Capture the Flag.
+        captures: mode === "ctf" ? Util.int(p, "captures", 0, 100, 0) : 0,
+        won: won,
       });
+    }
+    if (SOLO_MODES.indexOf(mode) >= 0 && winners > 1) {
+      return Util.fail(Code.INVALID_ARGUMENT, "too_many_winners: only one player wins a " + mode + " match");
     }
     return out;
   }
@@ -111,7 +120,7 @@ function rpcFoamFrenzyMatchReport(ctx: nkruntime.Context, logger: nkruntime.Logg
   if (FoamFrenzy.MODES.indexOf(mode) < 0) {
     return Util.fail(Code.INVALID_ARGUMENT, "mode must be one of " + FoamFrenzy.MODES.join(", "));
   }
-  const players = FoamFrenzy.parsePlayers(req["players"]);
+  const players = FoamFrenzy.parsePlayers(req["players"], mode);
   RateLimit.check(nk, userId, "foam-frenzy.match_report", 60, 3600);
 
   const roster = Rooms.roster(nk, game, matchId);

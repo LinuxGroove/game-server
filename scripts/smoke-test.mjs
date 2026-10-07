@@ -554,6 +554,8 @@ async function main() {
     };
     await expectError(rpc(players[1], "foam-frenzy.match_report", report), 403, "not_host");
     await expectError(rpc(host, "foam-frenzy.match_report", { ...report, mode: "golf" }), 400);
+    const twoWinners = { ...report, players: report.players.map((p) => ({ ...p, won: true })) };
+    await expectError(rpc(host, "foam-frenzy.match_report", twoWinners), 400, "too_many_winners");
     assert.equal((await rpc(host, "foam-frenzy.match_report", report)).recorded, 2);
     await expectError(rpc(host, "foam-frenzy.match_report", report), 409, "already_reported");
     const gh = await login("graveyard-hollow", "0.1.0");

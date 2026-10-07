@@ -108,13 +108,25 @@ test("foam-frenzy stats accumulate per mode", () => {
 });
 
 test("foam-frenzy match reports reject impossible players", () => {
-  const ok = g.FoamFrenzy.parsePlayers([{ user_id: "a", tags: 3, won: true }, { user_id: "b" }]);
+  const ok = g.FoamFrenzy.parsePlayers([{ user_id: "a", tags: 3, won: true }, { user_id: "b" }], "ffa");
   assert.deepEqual(JSON.parse(JSON.stringify(ok)), [
     { user_id: "a", tags: 3, outs: 0, captures: 0, won: true },
     { user_id: "b", tags: 0, outs: 0, captures: 0, won: false },
   ]);
-  assert.throws(() => g.FoamFrenzy.parsePlayers([]), (e) => /players must list/.test(e.message));
-  assert.throws(() => g.FoamFrenzy.parsePlayers([{ user_id: "a" }, { user_id: "a" }]), (e) => /duplicate/.test(e.message));
-  assert.throws(() => g.FoamFrenzy.parsePlayers([{ user_id: "a", tags: 100000 }]), (e) => /tags must be between/.test(e.message));
-  assert.throws(() => g.FoamFrenzy.parsePlayers(Array.from({ length: 9 }, (_, i) => ({ user_id: "u" + i }))), (e) => /1 to 8/.test(e.message));
+  assert.throws(() => g.FoamFrenzy.parsePlayers([], "ffa"), (e) => /players must list/.test(e.message));
+  assert.throws(() => g.FoamFrenzy.parsePlayers([{ user_id: "a" }, { user_id: "a" }], "ffa"), (e) => /duplicate/.test(e.message));
+  assert.throws(() => g.FoamFrenzy.parsePlayers([{ user_id: "a", tags: 100000 }], "ffa"), (e) => /tags must be between/.test(e.message));
+  assert.throws(() => g.FoamFrenzy.parsePlayers(Array.from({ length: 9 }, (_, i) => ({ user_id: "u" + i })), "ffa"), (e) => /1 to 8/.test(e.message));
+  // One winner in free-for-all and Dart Hoarder; a whole team in the others.
+  const two = [{ user_id: "a", won: true }, { user_id: "b", won: true }];
+  for (const mode of ["ffa", "hoarder"]) {
+    assert.throws(() => g.FoamFrenzy.parsePlayers(two, mode), (e) => /too_many_winners/.test(e.message), mode);
+  }
+  for (const mode of ["teams", "ctf"]) {
+    assert.equal(g.FoamFrenzy.parsePlayers(two, mode).length, 2, mode);
+  }
+  // Flag captures only count in Capture the Flag.
+  const capper = [{ user_id: "a", captures: 3 }];
+  assert.equal(g.FoamFrenzy.parsePlayers(capper, "ctf")[0].captures, 3);
+  assert.equal(g.FoamFrenzy.parsePlayers(capper, "teams")[0].captures, 0);
 });

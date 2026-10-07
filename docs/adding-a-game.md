@@ -12,15 +12,15 @@ digits and `-`), used in every namespace, and must never change once players
 have data under it.
 
 ```ts
-const GAME_FOAM_FRENZY: Registry.GameDef = {
-  id: "foam-frenzy",
-  name: "Foam Frenzy",
+const GAME_TOYBOX_GRAND_PRIX: Registry.GameDef = {
+  id: "toybox-grand-prix",
+  name: "Toybox Grand Prix",
   minVersion: "0.1.0",     // older clients are refused at login
   latestVersion: "0.1.0",  // older clients are told an update exists
   enabledByDefault: true,
   chat: false,
   leaderboards: [
-    // Created at startup as "foam-frenzy.best_time".
+    // Created at startup as "toybox-grand-prix.best_time".
     { id: "best_time", sort: "asc", operator: "best", reset: null, clientSubmit: true,
       minScore: 5000, maxScore: 600000, enableRank: true },
   ],
@@ -69,6 +69,7 @@ Add the file to `modules/tsconfig.json`, after the core files and before
 ```json
 "src/games/graveyard-hollow.ts",
 "src/games/foam-frenzy.ts",
+"src/games/toybox-grand-prix.ts",
 "src/games/sandbox.ts",
 "src/games/index.ts",
 ```
@@ -76,7 +77,7 @@ Add the file to `modules/tsconfig.json`, after the core files and before
 and add the definition to `modules/src/games/index.ts`:
 
 ```ts
-Registry.GAMES.push(GAME_GRAVEYARD_HOLLOW, GAME_FOAM_FRENZY, GAME_SANDBOX);
+Registry.GAMES.push(GAME_GRAVEYARD_HOLLOW, GAME_FOAM_FRENZY, GAME_TOYBOX_GRAND_PRIX, GAME_SANDBOX);
 ```
 
 The server checks every definition at startup (ids, duplicate names, score
@@ -93,15 +94,15 @@ Nakama's JavaScript runtime finds handlers by reading `InitModule`'s source,
 so the rules are strict:
 
 - Handlers are **global functions** with a name unique across all games:
-  prefix it with the game, for example `rpcFoamFrenzyRaceResult`.
+  prefix it with the game, for example `rpcToyboxGrandPrixRaceResult`.
 - Register each one in `modules/src/main.ts` under "Game modules", as a plain
   statement with a literal id named `<game>.<name>`:
 
   ```ts
-  initializer.registerRpc("foam-frenzy.race_result", rpcFoamFrenzyRaceResult);
+  initializer.registerRpc("toybox-grand-prix.race_result", rpcToyboxGrandPrixRaceResult);
   ```
 
-- Put helpers in a namespace named after the game (`namespace FoamFrenzy`).
+- Put helpers in a namespace named after the game (`namespace ToyboxGrandPrix`).
 - Start every handler with `Util.requireUser(ctx)` and
   `Registry.forSession(ctx)`, and refuse sessions of other games.
 - Throw with `Util.fail(Code.X, "reason: explanation")` so clients get a
@@ -110,7 +111,8 @@ so the rules are strict:
 - Check that reported players were really in the room with
   `Rooms.roster(nk, game, matchId)`, which works for both transports and gives
   the host (when the server knows it), the members and who is present now
-  ([graveyard-hollow.ts](../modules/src/games/graveyard-hollow.ts) is the example).
+  ([graveyard-hollow.ts](../modules/src/games/graveyard-hollow.ts) and
+  [foam-frenzy.ts](../modules/src/games/foam-frenzy.ts) are examples).
 
 The runtime is ES5 JavaScript (goja): no `async`, no Node or browser APIs, and
 match state must be plain objects of strings, numbers and booleans.

@@ -184,3 +184,42 @@ test("core.room_find tells a guest whether a bridge room is open", () => {
   list.splice(list.findIndex((p) => p.userId === "host"), 1);
   assert.equal(reason(() => find("QX7K2M")), "room_not_found");
 });
+
+test("foam-frenzy match reports come from the room's host and credit tags and wins", () => {
+  const nk = bridgeNk();
+  const written = [];
+  nk.leaderboardRecordWrite = (id, owner, username, score) => {
+    written.push(`${id}/${owner}/${score}`);
+    return {};
+  };
+  nk.usersGetId = (ids) => ids.map((userId) => ({ userId, username: userId }));
+  nk.storageList = () => ({ objects: [] });
+  const FOAM = { game: "foam-frenzy", version: "0.1.0" };
+  const name = "foam-frenzy:MATCH1";
+  for (const u of ["host", "a", "b"]) {
+    create(nk, name, u, FOAM);
+    nk.join(name, u);
+  }
+  const matchId = uuidv5dns(name) + ".";
+  const report = (userId, mode, players, vars = FOAM) =>
+    g.rpcFoamFrenzyMatchReport(ctx(vars, { userId }), logger, nk, JSON.stringify({ match_id: matchId, round: 1, mode, players }));
+  const players = [
+    { user_id: "host", tags: 5, outs: 1, captures: 0, won: true },
+    { user_id: "a", tags: 0, outs: 4, captures: 0, won: false },
+    { user_id: "b", tags: 2, outs: 3, captures: 0, won: false },
+  ];
+  assert.equal(reason(() => report("host", "ffa", players, GRAVEYARD)), "wrong_game");
+  assert.equal(reason(() => report("a", "ffa", players)), "not_host");
+  assert.equal(reason(() => report("host", "golf", players)), "mode must be one of ffa, teams, ctf, hoarder");
+  assert.equal(reason(() => report("host", "ffa", [...players, { user_id: "stranger" }])), "not_in_room");
+  assert.equal(reason(() => report("host", "ffa", players.map((p) => ({ ...p, won: true })))), "too_many_winners");
+  assert.equal(reason(() => report("host", "ffa", [{ ...players[0], tags: 9999 }])), "tags must be between 0 and 500");
+  assert.equal(reason(() => report("host", "ffa", players)), "ok");
+  assert.deepEqual(written.sort(), [
+    "foam-frenzy.tags/b/2",
+    "foam-frenzy.tags/host/5",
+    "foam-frenzy.wins/host/1",
+    "foam-frenzy.wins_weekly/host/1",
+  ]);
+  assert.equal(reason(() => report("host", "ffa", players)), "already_reported");
+});
