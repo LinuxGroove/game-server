@@ -242,8 +242,59 @@ go back to the bundled ones.
 - `snap logs -n=100 linuxgroove-game-server` for Nakama, PostgreSQL and Caddy
   logs (Nakama logs JSON).
 - `snap set linuxgroove-game-server metrics.port=9100` exposes Prometheus
-  metrics.
+  metrics. Keep the port closed in the firewall and scrape it locally.
 - Alert when the newest file in the backups folder is older than 26 hours.
+
+### Game telemetry
+
+With metrics on, the modules add counters per game next to Nakama's own
+metrics, all prefixed `nakama_custom_`:
+
+| Metric | Labels | Counts |
+| --- | --- | --- |
+| `logins` | game, version, platform, method, new | Successful logins (`new`: account created) |
+| `logins_rejected` | game, reason | Refused logins (`update_required`, `unknown_game`, ...) |
+| `active_players` | game | A player's first login of the UTC day (daily actives) |
+| `new_players` | game | A player's first login to that game |
+| `returning_players` | game, day | Players back exactly 1, 7 or 30 days (`d1`, `d7`, `d30`) after their first day |
+| `rooms_opened` | game, transport, source | Rooms by `relay`/`bridge`, opened by `code` or `matchmaker` |
+| `rooms_closed` | game, reason | Relay rooms ending, and why |
+| `room_seconds`, `room_players` | game | Summed over closed relay rooms (divide by `rooms_closed` for averages) |
+| `matchmaker_matches` | game | Matchmaker results |
+| `rounds`, `round_players` | game, outcome | Rounds reported by game modules |
+| `scores_submitted` | game, board | `core.score_submit` calls |
+| `blob_uploads`, `blob_downloads`, `shares_created` | game, kind | Upload and download links handed out, shares made |
+| `shares_opened`, `share_reports`, `account_deletions` | game | |
+
+Daily actives for a day are `increase(nakama_custom_active_players[1d])` over
+that UTC day; D1 retention is the day's `returning_players{day="d1"}` over
+the previous day's `new_players`. Label values come only from the game
+registry and fixed lists (a client's 17th distinct version becomes `other`),
+so a client can't create unlimited series. The exporter rewrites label values
+to letters, digits and `_`, so `graveyard-hollow` shows as `graveyard_hollow`
+and `0.1.0` as `0_1_0`. Counters start at zero on every restart, which
+`increase()` handles.
+
+Game modules count their own events with
+`Telemetry.count(nk, Telemetry.METRIC.<NAME>, {tags})`. Add new names to the
+`METRIC` table in `telemetry.ts`, and always pass the same tag keys for a
+name: Prometheus refuses a second set (a unit test checks this).
+
+### Grafana Cloud
+
+The free tier is plenty for one server. Install
+[Grafana Alloy](https://grafana.com/docs/alloy/latest/set-up/install/linux/)
+from Grafana's apt repository, copy
+[`deploy/grafana/config.alloy`](../deploy/grafana/config.alloy) to
+`/etc/alloy/config.alloy` and fill in your stack's Prometheus and Loki URLs
+and user ids. Put an access policy token with `metrics:write` and
+`logs:write` in `/etc/alloy/grafana-cloud-token` (mode 640, group `alloy`),
+then `sudo systemctl enable --now alloy`. It ships Nakama's metrics, machine
+stats (for the Linux Server integration's dashboards) and the system journal,
+with Nakama's and Caddy's log level as a label.
+
+Import [`deploy/grafana/game-telemetry.json`](../deploy/grafana/game-telemetry.json)
+(Dashboards, New, Import) for players, retention, rooms and feature use.
 
 ## Docker Compose instead
 

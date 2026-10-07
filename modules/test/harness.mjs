@@ -23,7 +23,16 @@ export const logger = {
 export function fakeNk() {
   const cache = new Map();
   const storage = new Map();
+  const metrics = [];
   return {
+    metrics,
+    metricsCounterAdd: (name, tags, delta) => metrics.push({ name, tags: { ...tags }, delta }),
+    /** Sum of a counter, optionally only where every given tag matches. */
+    counter(name, where = {}) {
+      return metrics
+        .filter((m) => m.name === name && Object.entries(where).every(([k, v]) => m.tags[k] === v))
+        .reduce((n, m) => n + m.delta, 0);
+    },
     uuidv4: () => randomUUID(),
     localcacheGet: (k) => cache.get(k),
     localcachePut: (k, v) => cache.set(k, v),

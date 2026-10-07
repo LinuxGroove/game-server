@@ -139,6 +139,7 @@ function rpcRoomCreate(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkr
   }
   RateLimit.check(nk, userId, "room_create", 10, 60);
   const room = Rooms.create(nk, game, { host: userId, allowed: "", listed: listed, maxPlayers: maxPlayers, meta: meta });
+  Telemetry.count(nk, Telemetry.METRIC.ROOMS_OPENED, { game: game.id, transport: "relay", source: "code" });
   return JSON.stringify({ match_id: room.matchId, code: room.code });
 }
 
@@ -186,7 +187,11 @@ function matchmakerMatched(
     return;
   }
   const game = Registry.find(ctx, matches[0].properties["game"] || "");
+  if (game) {
+    Telemetry.count(nk, Telemetry.METRIC.MATCHMAKER_MATCHES, { game: game.id });
+  }
   if (game && game.rooms && game.rooms.transport === "bridge") {
+    Telemetry.count(nk, Telemetry.METRIC.ROOMS_OPENED, { game: game.id, transport: "bridge", source: "matchmaker" });
     // Bridge games play in a relayed match; Nakama hands out join tokens.
     return;
   }
@@ -205,5 +210,6 @@ function matchmakerMatched(
     maxPlayers: users.length,
     meta: {},
   });
+  Telemetry.count(nk, Telemetry.METRIC.ROOMS_OPENED, { game: game.id, transport: "relay", source: "matchmaker" });
   return room.matchId;
 }

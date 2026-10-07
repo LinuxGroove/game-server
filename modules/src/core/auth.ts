@@ -57,8 +57,21 @@ function beforeAuthenticateDevice(
   nk: nkruntime.Nakama,
   data: nkruntime.AuthenticateDeviceRequest,
 ): nkruntime.AuthenticateDeviceRequest {
-  Auth.checkVars(ctx, data.account ? data.account.vars : null);
+  const vars = data.account ? data.account.vars : null;
+  Telemetry.checkLogin(ctx, nk, vars, function () {
+    Auth.checkVars(ctx, vars);
+  });
   return data;
+}
+
+function afterAuthenticateDevice(
+  ctx: nkruntime.Context,
+  logger: nkruntime.Logger,
+  nk: nkruntime.Nakama,
+  data: nkruntime.Session,
+  request: nkruntime.AuthenticateDeviceRequest,
+): void {
+  Telemetry.login(ctx, nk, request.account ? request.account.vars : null, "device", data.created === true);
 }
 
 function beforeAuthenticateCustom(
@@ -67,8 +80,21 @@ function beforeAuthenticateCustom(
   nk: nkruntime.Nakama,
   data: nkruntime.AuthenticateCustomRequest,
 ): nkruntime.AuthenticateCustomRequest {
-  Auth.checkVars(ctx, data.account ? data.account.vars : null);
+  const vars = data.account ? data.account.vars : null;
+  Telemetry.checkLogin(ctx, nk, vars, function () {
+    Auth.checkVars(ctx, vars);
+  });
   return data;
+}
+
+function afterAuthenticateCustom(
+  ctx: nkruntime.Context,
+  logger: nkruntime.Logger,
+  nk: nkruntime.Nakama,
+  data: nkruntime.Session,
+  request: nkruntime.AuthenticateCustomRequest,
+): void {
+  Telemetry.login(ctx, nk, request.account ? request.account.vars : null, "custom", data.created === true);
 }
 
 function beforeAuthenticateEmail(
@@ -77,8 +103,21 @@ function beforeAuthenticateEmail(
   nk: nkruntime.Nakama,
   data: nkruntime.AuthenticateEmailRequest,
 ): nkruntime.AuthenticateEmailRequest {
-  Auth.checkVars(ctx, data.account ? data.account.vars : null);
+  const vars = data.account ? data.account.vars : null;
+  Telemetry.checkLogin(ctx, nk, vars, function () {
+    Auth.checkVars(ctx, vars);
+  });
   return data;
+}
+
+function afterAuthenticateEmail(
+  ctx: nkruntime.Context,
+  logger: nkruntime.Logger,
+  nk: nkruntime.Nakama,
+  data: nkruntime.Session,
+  request: nkruntime.AuthenticateEmailRequest,
+): void {
+  Telemetry.login(ctx, nk, request.account ? request.account.vars : null, "email", data.created === true);
 }
 
 function beforeAuthenticateSteam(
@@ -87,6 +126,19 @@ function beforeAuthenticateSteam(
   nk: nkruntime.Nakama,
   data: nkruntime.AuthenticateSteamRequest,
 ): nkruntime.AuthenticateSteamRequest {
-  Auth.checkVars(ctx, data.account ? data.account.vars : null);
+  const vars = data.account ? data.account.vars : null;
+  Telemetry.checkLogin(ctx, nk, vars, function () {
+    Auth.checkVars(ctx, vars);
+  });
   return data;
+}
+
+function afterAuthenticateSteam(
+  ctx: nkruntime.Context,
+  logger: nkruntime.Logger,
+  nk: nkruntime.Nakama,
+  data: nkruntime.Session,
+  request: nkruntime.AuthenticateSteamRequest,
+): void {
+  Telemetry.login(ctx, nk, request.account ? request.account.vars : null, "steam", data.created === true);
 }

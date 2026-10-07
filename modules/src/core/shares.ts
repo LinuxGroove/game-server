@@ -124,6 +124,7 @@ function rpcShareCreate(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nk
       permissionWrite: 0,
     },
   ]);
+  Telemetry.count(nk, Telemetry.METRIC.SHARES_CREATED, { game: game.id, kind: kind.name });
   return JSON.stringify({ code: code });
 }
 
@@ -148,6 +149,7 @@ function rpcShareGet(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkrun
     return Util.fail(Code.NOT_FOUND, "share_not_found: no " + game.name + " share with code " + code);
   }
   const v = found[0].value;
+  Telemetry.count(nk, Telemetry.METRIC.SHARES_OPENED, { game: game.id });
   return JSON.stringify({
     code: code,
     kind: v["kind"],
@@ -224,5 +226,6 @@ function rpcShareReport(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nk
     return v;
   });
   logger.info("Share %s reported by %s: %s", code, userId, reason);
+  Telemetry.count(nk, Telemetry.METRIC.SHARE_REPORTS, { game: game.id });
   return "{}";
 }

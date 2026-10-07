@@ -1,0 +1,108 @@
+// Grafana Alloy for a LinuxGroove game server: ships Nakama metrics, machine
+// stats and the system journal to Grafana Cloud (docs/operations.md). Fill in
+// the <...> values from your stack and set "instance" to the machine's name.
+// The token lives in /etc/alloy/grafana-cloud-token.
+
+local.file "grafana_cloud_token" {
+  filename  = "/etc/alloy/grafana-cloud-token"
+  is_secret = true
+}
+
+// ---- Metrics -------------------------------------------------------------
+
+prometheus.remote_write "grafana_cloud" {
+  endpoint {
+    url = "https://<prometheus host>/api/prom/push"
+    basic_auth {
+      username = "<prometheus user id>"
+      password = local.file.grafana_cloud_token.content
+    }
+  }
+}
+
+// Nakama (snap setting metrics.port=9100).
+prometheus.scrape "nakama" {
+  targets = [{
+    "__address__" = "127.0.0.1:9100",
+    "job"         = "nakama",
+    "instance"    = "game-server",
+  }]
+  scrape_interval = "30s"
+  forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+// Machine stats; the job name matches the Linux integration dashboards.
+prometheus.exporter.unix "node" {
+  disable_collectors = ["ipvs", "btrfs", "infiniband", "xfs", "zfs"]
+}
+
+discovery.relabel "node" {
+  targets = prometheus.exporter.unix.node.targets
+  rule {
+    target_label = "instance"
+    replacement  = "game-server"
+  }
+  rule {
+    target_label = "job"
+    replacement  = "integrations/node_exporter"
+  }
+}
+
+prometheus.scrape "node" {
+  targets         = discovery.relabel.node.output
+  scrape_interval = "60s"
+  forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+// ---- Logs ----------------------------------------------------------------
+
+loki.write "grafana_cloud" {
+  endpoint {
+    url = "https://<loki host>/loki/api/v1/push"
+    basic_auth {
+      username = "<loki user id>"
+      password = local.file.grafana_cloud_token.content
+    }
+  }
+}
+
+// Whole system journal: the snap's services, sshd, kernel (ufw), snapd.
+loki.relabel "journal" {
+  forward_to = []
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label  = "unit"
+  }
+  rule {
+    source_labels = ["__journal_syslog_identifier"]
+    target_label  = "service"
+  }
+  rule {
+    source_labels = ["__journal_priority_keyword"]
+    target_label  = "priority"
+  }
+}
+
+loki.source.journal "journal" {
+  max_age       = "12h"
+  relabel_rules = loki.relabel.journal.rules
+  labels        = {
+    job      = "journal",
+    instance = "game-server",
+  }
+  forward_to = [loki.process.journal.receiver]
+}
+
+// Nakama and Caddy log JSON: lift "level" into a label to filter on.
+loki.process "journal" {
+  stage.match {
+    selector = "{service=~\"linuxgroove-game-server.(nakama|proxy)\"}"
+    stage.json {
+      expressions = { level = "level" }
+    }
+    stage.labels {
+      values = { level = "" }
+    }
+  }
+  forward_to = [loki.write.grafana_cloud.receiver]
+}

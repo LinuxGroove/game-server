@@ -101,6 +101,7 @@ function beforeMatchCreate(
   if (users.length === 0) {
     // The bridge makes the first player in a named room its host.
     Bridge.remember(nk, uuid, game.id, userId);
+    Telemetry.count(nk, Telemetry.METRIC.ROOMS_OPENED, { game: game.id, transport: "bridge", source: "code" });
   }
   return envelope;
 }

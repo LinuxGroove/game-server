@@ -78,6 +78,7 @@ function rpcScoreSubmit(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nk
   }
 
   const record = Leaderboards.write(nk, game, board.id, userId, ctx.username || "", score, subscore, metadata);
+  Telemetry.count(nk, Telemetry.METRIC.SCORES_SUBMITTED, { game: game.id, board: board.id });
   return JSON.stringify({
     record: {
       leaderboard_id: record.leaderboardId,

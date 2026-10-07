@@ -48,7 +48,7 @@ game's data the session can touch.
 | --- | --- | --- |
 | `game` | yes | The game id, for example `graveyard-hollow` |
 | `version` | yes | The client version, `MAJOR.MINOR.PATCH` |
-| `platform` | no | For stats, for example `ubuntu`, `ubuntu-core` |
+| `platform` | no | For stats: `linux`, `ubuntu`, `ubuntu-core`, `steamos`, `windows`, `macos`, `android`, `ios` or `web` (others count as `other`) |
 
 No other vars are accepted. Device authentication is the default: generate a
 UUID on first launch, store it in `user://`, and reuse it. Players can later
@@ -354,6 +354,11 @@ Nakama's own account delete) removes the player's blobs from object storage
 and their share codes, then the account, storage objects and leaderboard
 records. `core.account_export` returns everything the server stores about the
 player as JSON. Offer both in the game's settings.
+
+For player counts the server also keeps, per player and game, the first and
+last UTC day they logged in (`core.activity`, readable only by the server).
+It is deleted with the account and included in the export. Server metrics
+count players and events per game, never individual players.
 
 ## Graveyard Hollow
 

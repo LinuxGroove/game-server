@@ -17,6 +17,7 @@
     "./src/core/util.ts",
     "./src/core/registry.ts",
     "./src/core/ratelimit.ts",
+    "./src/core/telemetry.ts",
     "./src/core/sha256.ts",
     "./src/core/sha1.ts",
     "./src/core/s3.ts",

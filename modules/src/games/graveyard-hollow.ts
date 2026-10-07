@@ -146,5 +146,7 @@ function rpcGraveyardHollowRoundReport(ctx: nkruntime.Context, logger: nkruntime
     }
   }
   logger.info("Graveyard Hollow round %d in %s: %s won, %d players", round, matchId, winner, players.length);
+  Telemetry.count(nk, Telemetry.METRIC.ROUNDS, { game: game.id, outcome: winner + "_won" });
+  Telemetry.count(nk, Telemetry.METRIC.ROUND_PLAYERS, { game: game.id }, players.length);
   return JSON.stringify({ recorded: players.length });
 }

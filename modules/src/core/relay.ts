@@ -178,6 +178,23 @@ namespace Relay {
     }
   }
 
+  /** Reasons a room ends, as telemetry labels. */
+  const END_REASONS = ["empty", "host_left", "host_missing", "expired", "closed_by_host", "server_shutdown"];
+
+  /** Count a finished room: why it ended, how long it ran and who played. */
+  export function ended(nk: nkruntime.Nakama, s: State, tick: number, reason: string): void {
+    const game = { game: s.game };
+    let players = 0;
+    for (const u in s.seen) {
+      if (Object.prototype.hasOwnProperty.call(s.seen, u)) {
+        players++;
+      }
+    }
+    Telemetry.count(nk, Telemetry.METRIC.ROOMS_CLOSED, { game: s.game, reason: END_REASONS.indexOf(reason) >= 0 ? reason : "closed" });
+    Telemetry.count(nk, Telemetry.METRIC.ROOM_SECONDS, game, Math.round(tick / s.tickRate));
+    Telemetry.count(nk, Telemetry.METRIC.ROOM_PLAYERS, game, players);
+  }
+
   /** Small public key/value data the host shows in room lists. */
   export function checkMeta(meta: any): { [key: string]: any } | string {
     if (meta === undefined || meta === null) {
@@ -519,22 +536,27 @@ function relayMatchLoop(
   messages: nkruntime.MatchMessage[],
 ): { state: Relay.State } | null {
   if (state.closing) {
+    Relay.ended(nk, state, tick, state.closing);
     return null;
   }
   const rate = state.tickRate;
   if (state.emptySince >= 0 && Relay.playerCount(state) === 0 && tick - state.emptySince >= Relay.EMPTY_TIMEOUT_SEC * rate) {
+    Relay.ended(nk, state, tick, "empty");
     return null;
   }
   if (state.hostUserId === "" && state.reservedHost !== "" && tick >= state.hostGraceSec * rate) {
     Relay.close(state, dispatcher, "host_missing");
+    Relay.ended(nk, state, tick, state.closing);
     return null;
   }
   if (state.mode === "host" && state.hostAwaySince >= 0 && tick - state.hostAwaySince >= state.hostGraceSec * rate) {
     Relay.close(state, dispatcher, "host_left");
+    Relay.ended(nk, state, tick, state.closing);
     return null;
   }
   if (tick >= Relay.MAX_LIFETIME_SEC * rate) {
     Relay.close(state, dispatcher, "expired");
+    Relay.ended(nk, state, tick, state.closing);
     return null;
   }
 
@@ -550,6 +572,7 @@ function relayMatchLoop(
       Relay.handleControl(state, dispatcher, nk, sender, msg);
     }
     if (state.closing) {
+      Relay.ended(nk, state, tick, state.closing);
       return null;
     }
   }
@@ -566,6 +589,7 @@ function relayMatchTerminate(
   graceSeconds: number,
 ): { state: Relay.State } | null {
   Relay.close(state, dispatcher, "server_shutdown");
+  Relay.ended(nk, state, tick, state.closing);
   return { state: state };
 }
 

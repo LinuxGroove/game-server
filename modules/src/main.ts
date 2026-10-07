@@ -10,11 +10,16 @@ function InitModule(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkrunt
     throw new Error("Invalid game registry:\n" + errors.join("\n"));
   }
 
-  // Login checks: every session names its game and client version.
+  // Login checks: every session names its game and client version. The
+  // after hooks count logins, daily players and retention (telemetry.ts).
   initializer.registerBeforeAuthenticateDevice(beforeAuthenticateDevice);
   initializer.registerBeforeAuthenticateCustom(beforeAuthenticateCustom);
   initializer.registerBeforeAuthenticateEmail(beforeAuthenticateEmail);
   initializer.registerBeforeAuthenticateSteam(beforeAuthenticateSteam);
+  initializer.registerAfterAuthenticateDevice(afterAuthenticateDevice);
+  initializer.registerAfterAuthenticateCustom(afterAuthenticateCustom);
+  initializer.registerAfterAuthenticateEmail(afterAuthenticateEmail);
+  initializer.registerAfterAuthenticateSteam(afterAuthenticateSteam);
 
   // Namespacing and safety guards.
   initializer.registerBeforeWriteStorageObjects(beforeWriteStorageObjects);
@@ -59,6 +64,7 @@ function InitModule(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkrunt
   initializer.registerRpc("graveyard-hollow.round_report", rpcGraveyardHollowRoundReport);
 
   Leaderboards.createAll(ctx, logger, nk);
+  Telemetry.init(ctx, nk);
 
   const enabled: string[] = [];
   for (let i = 0; i < Registry.GAMES.length; i++) {

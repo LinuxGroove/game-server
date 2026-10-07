@@ -10,6 +10,8 @@ namespace Account {
     const blobs = Blobs.deleteAllFor(nk, logger, S3.config(ctx), userId);
     Shares.deleteAllFor(nk, userId);
     logger.info("Cleaned up account %s before deletion (%d blobs)", userId, blobs);
+    const game = Registry.find(ctx, ctx.vars ? ctx.vars["game"] || "" : "");
+    Telemetry.count(nk, Telemetry.METRIC.ACCOUNT_DELETIONS, { game: game ? game.id : "unknown" });
   }
 }
 

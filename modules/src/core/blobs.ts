@@ -100,6 +100,7 @@ function rpcBlobUploadUrl(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: 
 
   const headers = { "Content-Length": String(size), "Content-Type": contentType };
   const url = S3.presign(cfg, "PUT", key, Blobs.UPLOAD_EXPIRY_SEC, headers, new Date(), false);
+  Telemetry.count(nk, Telemetry.METRIC.BLOB_UPLOADS, { game: game.id, kind: kind.name });
   return JSON.stringify({
     key: key,
     url: url,
@@ -116,7 +117,8 @@ function rpcBlobDownloadUrl(ctx: nkruntime.Context, logger: nkruntime.Logger, nk
   const cfg = Blobs.requireConfig(ctx);
   const req = Util.parsePayload(payload);
   const key = Util.str(req, "key", 200, true);
-  Blobs.checkKey(game, key);
+  const parts = Blobs.checkKey(game, key);
+  Telemetry.count(nk, Telemetry.METRIC.BLOB_DOWNLOADS, { game: game.id, kind: parts[1] });
 
   if (cfg.publicUrl) {
     return JSON.stringify({ url: cfg.publicUrl + "/" + S3.uriEncode(key, true), expires_in: 0 });
