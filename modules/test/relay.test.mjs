@@ -72,7 +72,7 @@ test("the reserved host takes the role when they arrive", () => {
 
 test("join attempts enforce game, size, invitations and kicks", () => {
   const r = room("sandbox", { max_players: 2, allowed: "user-1,user-2,user-3" });
-  assert.equal(r.attempt(presence(1), "lantern-out").rejectMessage, "wrong_game");
+  assert.equal(r.attempt(presence(1), "graveyard-hollow").rejectMessage, "wrong_game");
   assert.equal(r.attempt(presence(9)).rejectMessage, "not_invited");
   r.join(presence(1));
   r.join(presence(2));

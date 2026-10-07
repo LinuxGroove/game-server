@@ -67,7 +67,7 @@ Add the file to `modules/tsconfig.json`, after the core files and before
 `src/games/index.ts`:
 
 ```json
-"src/games/lantern-out.ts",
+"src/games/graveyard-hollow.ts",
 "src/games/foam-frenzy.ts",
 "src/games/sandbox.ts",
 "src/games/index.ts",
@@ -76,7 +76,7 @@ Add the file to `modules/tsconfig.json`, after the core files and before
 and add the definition to `modules/src/games/index.ts`:
 
 ```ts
-Registry.GAMES.push(GAME_LANTERN_OUT, GAME_FOAM_FRENZY, GAME_SANDBOX);
+Registry.GAMES.push(GAME_GRAVEYARD_HOLLOW, GAME_FOAM_FRENZY, GAME_SANDBOX);
 ```
 
 The server checks every definition at startup (ids, duplicate names, score
@@ -86,7 +86,7 @@ ranges, room sizes) and refuses to start with a clear message if one is wrong.
 ## 3. Add server logic, if the game needs it
 
 Most games need none: storage, leaderboards, shares, blobs and rooms are
-generic. When a game needs its own rules, such as Lantern Out turning a host's
+generic. When a game needs its own rules, such as Graveyard Hollow turning a host's
 round report into stats and leaderboard records, add RPCs in the game's file.
 
 Nakama's JavaScript runtime finds handlers by reading `InitModule`'s source,
@@ -110,7 +110,7 @@ so the rules are strict:
 - Check that reported players were really in the room with
   `Rooms.roster(nk, game, matchId)`, which works for both transports and gives
   the host (when the server knows it), the members and who is present now
-  ([lantern-out.ts](../modules/src/games/lantern-out.ts) is the example).
+  ([graveyard-hollow.ts](../modules/src/games/graveyard-hollow.ts) is the example).
 
 The runtime is ES5 JavaScript (goja): no `async`, no Node or browser APIs, and
 match state must be plain objects of strings, numbers and booleans.

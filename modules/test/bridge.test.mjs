@@ -27,7 +27,7 @@ test("sha1 matches node:crypto", () => {
 test("named room ids match Nakama's UUIDv5 of the name", () => {
   // Seen from a real Nakama 3.41 server: match_create {name: "sandbox:ABC123"}.
   assert.equal(g.Uuid.v5dns("sandbox:ABC123"), "2ddf53e4-f790-5755-a7d4-1459a9e89c04");
-  for (const name of ["lantern-out:QX7K2M", "a", "ランプ:Ü"]) {
+  for (const name of ["graveyard-hollow:QX7K2M", "a", "ランプ:Ü"]) {
     assert.equal(g.Uuid.v5dns(name), uuidv5dns(name));
   }
 });
@@ -50,15 +50,15 @@ function bridgeNk() {
   return nk;
 }
 
-const LANTERN = { game: "lantern-out", version: "0.1.0" };
+const GRAVEYARD = { game: "graveyard-hollow", version: "0.1.0" };
 const SANDBOX_ENV = { GAME_SANDBOX_ENABLED: "true" };
 
-function create(nk, name, userId, vars = LANTERN) {
+function create(nk, name, userId, vars = GRAVEYARD) {
   const envelope = { matchCreate: name === undefined ? {} : { name } };
   return g.beforeMatchCreate(ctx(vars, { userId, env: SANDBOX_ENV }), logger, nk, envelope);
 }
 
-function join(nk, matchJoin, userId, vars = LANTERN) {
+function join(nk, matchJoin, userId, vars = GRAVEYARD) {
   return g.beforeMatchJoin(ctx(vars, { userId, env: SANDBOX_ENV }), logger, nk, { matchJoin });
 }
 
@@ -75,21 +75,21 @@ test("bridge rooms must be named for the session's game", () => {
   const nk = bridgeNk();
   assert.equal(reason(() => create(nk, undefined, "u1")), "bad_room_name");
   assert.equal(reason(() => create(nk, "sandbox:ABCD12", "u1")), "bad_room_name");
-  assert.equal(reason(() => create(nk, "lantern-out:abc123", "u1")), "bad_room_name");
-  assert.equal(reason(() => create(nk, "lantern-out:AB", "u1")), "bad_room_name");
-  assert.equal(reason(() => create(nk, "lantern-out:QX7K2M", "u1")), "ok");
+  assert.equal(reason(() => create(nk, "graveyard-hollow:abc123", "u1")), "bad_room_name");
+  assert.equal(reason(() => create(nk, "graveyard-hollow:AB", "u1")), "bad_room_name");
+  assert.equal(reason(() => create(nk, "graveyard-hollow:QX7K2M", "u1")), "ok");
   // Relay-room games use core.room_create instead.
   assert.equal(reason(() => create(nk, "sandbox:ABCD12", "u1", { game: "sandbox", version: "1.2.0" })), "use_room_rpcs");
 });
 
 test("the first player in a named room is remembered as its host", () => {
   const nk = bridgeNk();
-  create(nk, "lantern-out:QX7K2M", "host");
-  const matchId = nk.join("lantern-out:QX7K2M", "host");
-  create(nk, "lantern-out:QX7K2M", "guest");
-  nk.join("lantern-out:QX7K2M", "guest");
+  create(nk, "graveyard-hollow:QX7K2M", "host");
+  const matchId = nk.join("graveyard-hollow:QX7K2M", "host");
+  create(nk, "graveyard-hollow:QX7K2M", "guest");
+  nk.join("graveyard-hollow:QX7K2M", "guest");
 
-  const game = g.Registry.find(ctx(LANTERN), "lantern-out");
+  const game = g.Registry.find(ctx(GRAVEYARD), "graveyard-hollow");
   const roster = g.Rooms.roster(nk, game, matchId);
   assert.equal(roster.host, "host");
   assert.deepEqual(Array.from(roster.members), ["host", "guest"]);
@@ -97,7 +97,7 @@ test("the first player in a named room is remembered as its host", () => {
 
 test("full bridge rooms refuse newcomers but let players back in", () => {
   const nk = bridgeNk();
-  const name = "lantern-out:FULL01";
+  const name = "graveyard-hollow:FULL01";
   for (let i = 0; i < 10; i++) {
     create(nk, name, "p" + i);
     nk.join(name, "p" + i);
@@ -117,12 +117,12 @@ test("joining by id only reaches the session's own game's rooms", () => {
   assert.equal(reason(() => join(nk, { token: "x.y.z" }, "u1")), "ok");
   assert.equal(reason(() => join(nk, { matchId: randomUUID() + ".node1" }, "u1")), "ok");
   // A relay-room game can't wander into a bridge room.
-  create(nk, "lantern-out:ROOM42", "u1");
-  const matchId = nk.join("lantern-out:ROOM42", "u1");
+  create(nk, "graveyard-hollow:ROOM42", "u1");
+  const matchId = nk.join("graveyard-hollow:ROOM42", "u1");
   assert.equal(reason(() => join(nk, { matchId }, "u2", { game: "sandbox", version: "1.2.0" })), "use_room_rpcs");
 });
 
-test("lantern-out round reports in bridge rooms come from the room's host", () => {
+test("graveyard-hollow round reports in bridge rooms come from the room's host", () => {
   const nk = bridgeNk();
   const written = [];
   nk.leaderboardRecordWrite = (id, owner) => {
@@ -131,15 +131,15 @@ test("lantern-out round reports in bridge rooms come from the room's host", () =
   };
   nk.usersGetId = (ids) => ids.map((userId) => ({ userId, username: userId }));
   nk.storageList = () => ({ objects: [] });
-  const name = "lantern-out:ROUND1";
+  const name = "graveyard-hollow:ROUND1";
   for (const u of ["host", "a", "b", "c"]) {
     create(nk, name, u);
     nk.join(name, u);
   }
   const matchId = uuidv5dns(name) + ".";
   const report = (userId, players) =>
-    g.rpcLanternOutRoundReport(
-      ctx(LANTERN, { userId }),
+    g.rpcGraveyardHollowRoundReport(
+      ctx(GRAVEYARD, { userId }),
       logger,
       nk,
       JSON.stringify({ match_id: matchId, round: 1, winner: "hollow", players }),
@@ -152,6 +152,6 @@ test("lantern-out round reports in bridge rooms come from the room's host", () =
   assert.equal(reason(() => report("a", players)), "not_host");
   assert.equal(reason(() => report("host", [...players, { user_id: "stranger", team: "village" }])), "not_in_room");
   assert.equal(reason(() => report("host", players)), "ok");
-  assert.deepEqual(written.sort(), ["lantern-out.wins/a", "lantern-out.wins_weekly/a"]);
+  assert.deepEqual(written.sort(), ["graveyard-hollow.wins/a", "graveyard-hollow.wins_weekly/a"]);
   assert.equal(reason(() => report("host", players)), "already_reported");
 });

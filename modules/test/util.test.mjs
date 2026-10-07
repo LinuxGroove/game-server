@@ -33,7 +33,7 @@ test("byte length matches UTF-8", () => {
 test("the shipped game registry is valid", () => {
   assert.deepEqual(Array.from(g.Registry.validateAll()), []);
   const ids = Array.from(g.Registry.GAMES, (x) => x.id);
-  assert.ok(ids.includes("lantern-out"), ids.join(", "));
+  assert.ok(ids.includes("graveyard-hollow"), ids.join(", "));
   assert.ok(ids.includes("sandbox"), ids.join(", "));
 });
 
@@ -68,13 +68,13 @@ test("rate limits refuse calls past the limit", () => {
 
 test("matchmaker tickets are pinned to the session's game", () => {
   const msg = { query: "+properties.mode:ranked", stringProperties: { mode: "ranked" }, minCount: 2, maxCount: 99 };
-  g.Rooms.tagTicket(g.GAME_LANTERN_OUT, msg);
-  assert.equal(msg.query, "+properties.game:lantern-out +properties.mode:ranked");
-  assert.equal(msg.stringProperties.game, "lantern-out");
+  g.Rooms.tagTicket(g.GAME_GRAVEYARD_HOLLOW, msg);
+  assert.equal(msg.query, "+properties.game:graveyard-hollow +properties.mode:ranked");
+  assert.equal(msg.stringProperties.game, "graveyard-hollow");
   assert.equal(msg.maxCount, 10);
   const any = { query: "*", stringProperties: null, minCount: 4, maxCount: 4 };
-  g.Rooms.tagTicket(g.GAME_LANTERN_OUT, any);
-  assert.equal(any.query, "+properties.game:lantern-out");
+  g.Rooms.tagTicket(g.GAME_GRAVEYARD_HOLLOW, any);
+  assert.equal(any.query, "+properties.game:graveyard-hollow");
 });
 
 test("optimistic storage updates retry on conflicts", () => {
@@ -91,8 +91,8 @@ test("optimistic storage updates retry on conflicts", () => {
   assert.equal(v2.n, 2);
 });
 
-test("lantern-out stats accumulate per team", () => {
-  let s = g.LanternOut.addRound(null, "village", true, true);
-  s = g.LanternOut.addRound(s, "hollow", false, false);
+test("graveyard-hollow stats accumulate per team", () => {
+  let s = g.GraveyardHollow.addRound(null, "village", true, true);
+  s = g.GraveyardHollow.addRound(s, "hollow", false, false);
   assert.deepEqual({ ...s }, { rounds: 2, wins: 1, village_rounds: 1, village_wins: 1, hollow_rounds: 1, hollow_wins: 0, survived: 1 });
 });

@@ -1,7 +1,7 @@
 // Login checks: every session must say which game and client version it is.
 //
 // Clients pass session vars when they authenticate, for example
-// {"game": "lantern-out", "version": "0.1.0", "platform": "ubuntu"}.
+// {"game": "graveyard-hollow", "version": "0.1.0", "platform": "ubuntu"}.
 // Nakama stores the vars in the session token, so every later call carries
 // them without the client repeating itself.
 
@@ -16,7 +16,7 @@ namespace Auth {
     if (!vars || !vars["game"]) {
       Util.fail(
         Code.INVALID_ARGUMENT,
-        "missing_game: authenticate with session vars {game, version}, for example {\"game\": \"lantern-out\", \"version\": \"1.0.0\"}",
+        "missing_game: authenticate with session vars {game, version}, for example {\"game\": \"graveyard-hollow\", \"version\": \"1.0.0\"}",
       );
       return;
     }

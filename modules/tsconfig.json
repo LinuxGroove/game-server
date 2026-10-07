@@ -30,7 +30,7 @@
     "./src/core/rooms.ts",
     "./src/core/account.ts",
     "./src/core/config.ts",
-    "./src/games/lantern-out.ts",
+    "./src/games/graveyard-hollow.ts",
     "./src/games/sandbox.ts",
     "./src/games/index.ts",
     "./src/main.ts"

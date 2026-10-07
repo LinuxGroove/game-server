@@ -113,7 +113,7 @@ namespace Registry {
   /** Filled in by games/index.ts, after every game file has loaded. */
   export const GAMES: GameDef[] = [];
 
-  /** Runtime env key for a per-game override, e.g. GAME_LANTERN_OUT_MIN_VERSION. */
+  /** Runtime env key for a per-game override, e.g. GAME_GRAVEYARD_HOLLOW_MIN_VERSION. */
   export function envKey(gameId: string, setting: string): string {
     return "GAME_" + gameId.toUpperCase().replace(/-/g, "_") + "_" + setting;
   }

@@ -244,7 +244,7 @@ async function main() {
   });
   await step("own collections are writable", () => http("PUT", "/v2/storage", { token: a.token, body: obj("sandbox.notes", { hi: 1 }, 2) }));
   await step("other games' collections are refused", () =>
-    expectError(http("PUT", "/v2/storage", { token: a.token, body: obj("lantern-out.profile", { hi: 1 }) }), 403, "wrong_namespace"),
+    expectError(http("PUT", "/v2/storage", { token: a.token, body: obj("graveyard-hollow.profile", { hi: 1 }) }), 403, "wrong_namespace"),
   );
   await step("undeclared collections are refused", () =>
     expectError(http("PUT", "/v2/storage", { token: a.token, body: obj("sandbox.anything", { hi: 1 }) }), 403, "read_only"),
@@ -369,7 +369,7 @@ async function main() {
     sd.close();
   });
   await step("other games cannot join", async () => {
-    const l = await login("lantern-out", "0.1.0");
+    const l = await login("graveyard-hollow", "0.1.0");
     const sl = await new Socket(l).connect();
     await assert.rejects(sl.join(room.match_id), /wrong_game/);
     sl.close();
@@ -383,7 +383,7 @@ async function main() {
     await assert.rejects(sc.join(room.match_id), /kicked/);
   });
   await step("players can't hop into another game's matchmaker pool", async () => {
-    const l = await login("lantern-out", "0.1.0");
+    const l = await login("graveyard-hollow", "0.1.0");
     const sl = await new Socket(l).connect();
     const t1 = await sb.request({ matchmaker_add: { min_count: 2, max_count: 2, query: "*" } });
     const t2 = await sl.request({ matchmaker_add: { min_count: 2, max_count: 2, query: "*" } });
@@ -422,26 +422,26 @@ async function main() {
   sb.close();
   sc.close();
 
-  // Lantern Out: bridge rooms (Nakama relayed matches named "lantern-out:<CODE>",
+  // Graveyard Hollow: bridge rooms (Nakama relayed matches named "graveyard-hollow:<CODE>",
   // as nakama-godot's NakamaMultiplayerBridge uses them).
   const code = () => Array.from({ length: 6 }, () => "ABCDEFGHJKMNPQRSTVWXYZ23456789"[Math.floor(Math.random() * 30)]).join("");
   const createNamed = (s, name) => s.request({ match_create: name === undefined ? {} : { name } }).then((m) => m.match);
-  await step("lantern-out rooms are named matches for its own game only", async () => {
-    const l = await login("lantern-out", "0.1.0");
+  await step("graveyard-hollow rooms are named matches for its own game only", async () => {
+    const l = await login("graveyard-hollow", "0.1.0");
     const s = await new Socket(l).connect();
     await assert.rejects(createNamed(s), /bad_room_name/);
     await assert.rejects(createNamed(s, "sandbox:" + code()), /bad_room_name/);
-    await assert.rejects(createNamed(s, "lantern-out:abc"), /bad_room_name/);
+    await assert.rejects(createNamed(s, "graveyard-hollow:abc"), /bad_room_name/);
     await expectError(rpc(l, "core.room_create", {}), 400, "use_named_rooms");
     const sbx = await new Socket(await login("sandbox", "1.2.0")).connect();
     await assert.rejects(sbx.request({ match_create: { name: "sandbox:" + code() } }), /use_room_rpcs/);
     s.close();
     sbx.close();
   });
-  await step("the first player in a lantern-out room hosts, others join by name", async () => {
-    const name = "lantern-out:" + code();
+  await step("the first player in a graveyard-hollow room hosts, others join by name", async () => {
+    const name = "graveyard-hollow:" + code();
     const players = [];
-    for (let i = 0; i < 3; i++) players.push(await new Socket(await login("lantern-out", "0.1.0")).connect());
+    for (let i = 0; i < 3; i++) players.push(await new Socket(await login("graveyard-hollow", "0.1.0")).connect());
     const first = await createNamed(players[0], name);
     assert.equal(first.size, 1);
     assert.ok(!first.presences || first.presences.length === 0, "the first player sees an empty room and hosts");
@@ -458,21 +458,21 @@ async function main() {
     await players[1].nothing((m) => m.match_data);
     for (const s of players) s.close();
   });
-  await step("full lantern-out rooms refuse an 11th player", async () => {
-    const name = "lantern-out:" + code();
+  await step("full graveyard-hollow rooms refuse an 11th player", async () => {
+    const name = "graveyard-hollow:" + code();
     const sockets = [];
     for (let i = 0; i < 10; i++) {
-      const s = await new Socket(await login("lantern-out", "0.1.0")).connect();
+      const s = await new Socket(await login("graveyard-hollow", "0.1.0")).connect();
       await createNamed(s, name);
       sockets.push(s);
     }
-    const late = await new Socket(await login("lantern-out", "0.1.0")).connect();
+    const late = await new Socket(await login("graveyard-hollow", "0.1.0")).connect();
     await assert.rejects(createNamed(late, name), /room_full/);
     for (const s of [...sockets, late]) s.close();
   });
-  await step("the matchmaker gives lantern-out players a bridge room", async () => {
-    const p1 = await new Socket(await login("lantern-out", "0.1.0")).connect();
-    const p2 = await new Socket(await login("lantern-out", "0.1.0")).connect();
+  await step("the matchmaker gives graveyard-hollow players a bridge room", async () => {
+    const p1 = await new Socket(await login("graveyard-hollow", "0.1.0")).connect();
+    const p2 = await new Socket(await login("graveyard-hollow", "0.1.0")).connect();
     await p1.request({ matchmaker_add: { min_count: 2, max_count: 2, query: "*" } });
     await p2.request({ matchmaker_add: { min_count: 2, max_count: 2, query: "*" } });
     const m1 = await p1.next((m) => m.matchmaker_matched, 20000);
@@ -485,13 +485,13 @@ async function main() {
     p1.close();
     p2.close();
   });
-  await step("lantern-out hosts report rounds into stats and leaderboards", async () => {
-    const name = "lantern-out:" + code();
+  await step("graveyard-hollow hosts report rounds into stats and leaderboards", async () => {
+    const name = "graveyard-hollow:" + code();
     const players = [];
     const sockets = [];
     let matchId = "";
     for (let i = 0; i < 4; i++) {
-      const p = await login("lantern-out", "0.1.0");
+      const p = await login("graveyard-hollow", "0.1.0");
       const s = await new Socket(p).connect();
       matchId = (await createNamed(s, name)).match_id;
       players.push(p);
@@ -504,24 +504,24 @@ async function main() {
       winner: "hollow",
       players: players.map((p, i) => ({ user_id: p.userId, team: i === 3 ? "hollow" : "village", survived: i !== 1 })),
     };
-    await expectError(rpc(players[1], "lantern-out.round_report", report), 403, "not_host");
-    const res = await rpc(host, "lantern-out.round_report", report);
+    await expectError(rpc(players[1], "graveyard-hollow.round_report", report), 403, "not_host");
+    const res = await rpc(host, "graveyard-hollow.round_report", report);
     assert.equal(res.recorded, 4);
-    await expectError(rpc(host, "lantern-out.round_report", report), 409, "already_reported");
-    const outsider = await login("lantern-out", "0.1.0");
+    await expectError(rpc(host, "graveyard-hollow.round_report", report), 409, "already_reported");
+    const outsider = await login("graveyard-hollow", "0.1.0");
     await expectError(
-      rpc(host, "lantern-out.round_report", { ...report, round: 2, players: [{ user_id: outsider.userId, team: "village" }] }),
+      rpc(host, "graveyard-hollow.round_report", { ...report, round: 2, players: [{ user_id: outsider.userId, team: "village" }] }),
       400,
       "not_in_room",
     );
     const stats = await http("POST", "/v2/storage", {
       token: players[1].token,
-      body: { object_ids: [{ collection: "lantern-out.stats", key: "stats", user_id: players[3].userId }] },
+      body: { object_ids: [{ collection: "graveyard-hollow.stats", key: "stats", user_id: players[3].userId }] },
     });
     const v = JSON.parse(stats.objects[0].value);
     assert.equal(v.rounds, 1);
     assert.equal(v.hollow_wins, 1);
-    const board = await http("GET", `/v2/leaderboard/lantern-out.wins?owner_ids=${players[3].userId}`, { token: host.token });
+    const board = await http("GET", `/v2/leaderboard/graveyard-hollow.wins?owner_ids=${players[3].userId}`, { token: host.token });
     assert.equal(Number(board.owner_records[0].score), 1);
     for (const s of sockets) s.close();
   });

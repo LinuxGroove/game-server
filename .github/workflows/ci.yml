@@ -123,7 +123,7 @@ jobs:
           if sudo snap set linuxgroove-game-server role=api; then
             echo "role=api without a database-url should be refused"; exit 1
           fi
-          if sudo snap set linuxgroove-game-server games.lantern-out.colour=red; then
+          if sudo snap set linuxgroove-game-server games.graveyard-hollow.colour=red; then
             echo "unknown game settings should be refused"; exit 1
           fi
       - name: Survives a refresh and a restart

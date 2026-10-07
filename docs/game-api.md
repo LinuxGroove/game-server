@@ -11,11 +11,11 @@ and the server keeps each game's data in its own namespace:
 
 | What | Name on the server | Example |
 | --- | --- | --- |
-| Leaderboards | `<game>.<board>` | `lantern-out.wins` |
-| Storage collections | `<game>.<name>` | `lantern-out.progress` |
+| Leaderboards | `<game>.<board>` | `graveyard-hollow.wins` |
+| Storage collections | `<game>.<name>` | `graveyard-hollow.progress` |
 | Blob object keys | `<game>/<kind>/<user id>/<blob id>` | `sandbox/ghost/…/…` |
-| Rooms | match name, or label field `game` | `lantern-out:QX7K2M` |
-| Game RPCs | `<game>.<name>` | `lantern-out.round_report` |
+| Rooms | match name, or label field `game` | `graveyard-hollow:QX7K2M` |
+| Game RPCs | `<game>.<name>` | `graveyard-hollow.round_report` |
 | Shared RPCs | `core.<name>` | `core.config` |
 
 Games stay offline-first: every call here is optional, and the game should
@@ -30,7 +30,7 @@ work without a server.
 - [Blobs](#blobs-ghosts-replays-screenshots)
 - [Online rooms](#online-rooms)
 - [Account deletion and export](#account-deletion-and-export)
-- [Lantern Out](#lantern-out)
+- [Graveyard Hollow](#graveyard-hollow)
 - [Sandbox test game](#sandbox-test-game)
 
 ## Connecting
@@ -46,7 +46,7 @@ game's data the session can touch.
 
 | Var | Required | Value |
 | --- | --- | --- |
-| `game` | yes | The game id, for example `lantern-out` |
+| `game` | yes | The game id, for example `graveyard-hollow` |
 | `version` | yes | The client version, `MAJOR.MINOR.PATCH` |
 | `platform` | no | For stats, for example `ubuntu`, `ubuntu-core` |
 
@@ -56,7 +56,7 @@ link an email or Steam account with Nakama's normal link calls.
 
 ```gdscript
 var client := Nakama.create_client(server_key, host, port, scheme)
-var vars := {"game": "lantern-out", "version": "0.1.0", "platform": "ubuntu"}
+var vars := {"game": "graveyard-hollow", "version": "0.1.0", "platform": "ubuntu"}
 var session := await client.authenticate_device_async(device_id, null, true, vars)
 if session.is_exception():
     # session.get_exception().message starts with a reason, see Errors.
@@ -80,7 +80,7 @@ Errors carry a gRPC status code (an HTTP status over REST) and a message that
 starts with a stable reason, then a colon and a human-readable explanation:
 
 ```
-update_required: Lantern Out 0.0.9 is too old for this server, update to 0.1.0 or newer
+update_required: Graveyard Hollow 0.0.9 is too old for this server, update to 0.1.0 or newer
 ```
 
 Match on the part before the colon. Reasons:
@@ -123,18 +123,18 @@ var config: Dictionary = JSON.parse_string(res.payload)
 
 ```json
 {
-  "game": "lantern-out",
-  "name": "Lantern Out",
+  "game": "graveyard-hollow",
+  "name": "Graveyard Hollow",
   "server_time": 1790000000,
   "motd": "",
   "version": {"client": "0.1.0", "min": "0.1.0", "latest": "0.1.0", "update_available": false},
   "features": {
     "chat": false,
-    "leaderboards": [{"id": "lantern-out.wins", "name": "wins", "sort": "desc", "operator": "incr", "reset": null, "client_submit": false}],
-    "collections": [{"id": "lantern-out.progress", "name": "progress", "client_write": true, "max_bytes": 32768, "read": "owner"}],
+    "leaderboards": [{"id": "graveyard-hollow.wins", "name": "wins", "sort": "desc", "operator": "incr", "reset": null, "client_submit": false}],
+    "collections": [{"id": "graveyard-hollow.progress", "name": "progress", "client_write": true, "max_bytes": 32768, "read": "owner"}],
     "blobs": [],
     "shares": [],
-    "rooms": {"transport": "bridge", "min_players": 4, "max_players": 10, "matchmaking": true, "room_name_prefix": "lantern-out:"}
+    "rooms": {"transport": "bridge", "min_players": 4, "max_players": 10, "matchmaking": true, "room_name_prefix": "graveyard-hollow:"}
   }
 }
 ```
@@ -150,10 +150,10 @@ Use Nakama's storage API with the game's collections (`<game>.<name>`). The
 server refuses writes to any other collection, values over the collection's
 size limit, more than 16 objects per write, and public read permission on
 owner-only collections. Collections the game marks server-written (like
-`lantern-out.stats`) can be read but not written by clients.
+`graveyard-hollow.stats`) can be read but not written by clients.
 
 ```gdscript
-var obj := NakamaWriteStorageObject.new("lantern-out.progress", "main", 1, 1, JSON.stringify(progress), "")
+var obj := NakamaWriteStorageObject.new("graveyard-hollow.progress", "main", 1, 1, JSON.stringify(progress), "")
 await client.write_storage_objects_async(session, [obj])
 ```
 
@@ -167,8 +167,8 @@ authoritative: clients can't write records directly. Read them with Nakama's
 normal calls and the full id:
 
 ```gdscript
-var top := await client.list_leaderboard_records_async(session, "lantern-out.wins", null, null, 20)
-var mine := await client.list_leaderboard_records_around_owner_async(session, "lantern-out.wins", session.user_id, null, 5)
+var top := await client.list_leaderboard_records_async(session, "graveyard-hollow.wins", null, null, 20)
+var mine := await client.list_leaderboard_records_around_owner_async(session, "graveyard-hollow.wins", session.user_id, null, 5)
 ```
 
 Boards the game marks `client_submit` take scores through `core.score_submit`,
@@ -180,7 +180,7 @@ core.score_submit {"board": "time_ms", "score": 61234, "subscore": 0, "metadata"
 ```
 
 `board` is the short name. Metadata is optional, at most 2 KB. Other boards
-are written by the game's server module (for Lantern Out, from round reports).
+are written by the game's server module (for Graveyard Hollow, from round reports).
 
 ## Share codes
 
@@ -232,7 +232,7 @@ two kinds of room, set in its definition and reported by `core.config` as
 | Room codes | Chosen by the client, room named `<game>:<CODE>` | Issued by the server, `core.room_create` |
 | Host | First player in (the bridge decides) | The room's creator |
 | Server checks | Name, game, room size, who opened the room | Also locking, kicks, public listing, host-only messages |
-| Used by | Lantern Out | Sandbox |
+| Used by | Graveyard Hollow | Sandbox |
 
 ### Bridge rooms
 
@@ -243,7 +243,7 @@ host included, joins the room named `<game>:<CODE>`:
 var bridge := NakamaMultiplayerBridge.new(socket)
 bridge.match_join_error.connect(_on_join_error)
 bridge.match_joined.connect(_on_joined)
-bridge.join_named_match("lantern-out:" + code)
+bridge.join_named_match("graveyard-hollow:" + code)
 multiplayer.multiplayer_peer = bridge.multiplayer_peer
 ```
 
@@ -355,25 +355,25 @@ and their share codes, then the account, storage objects and leaderboard
 records. `core.account_export` returns everything the server stores about the
 player as JSON. Offer both in the game's settings.
 
-## Lantern Out
+## Graveyard Hollow
 
-Game id `lantern-out`. Bridge rooms named `lantern-out:<CODE>` for 4–10
+Game id `graveyard-hollow`. Bridge rooms named `graveyard-hollow:<CODE>` for 4–10
 players, with quick match. No free-text chat.
 
 | Collection | Client writes | Read | Max | Use |
 | --- | --- | --- | --- | --- |
-| `lantern-out.profile` | yes | public allowed | 4 KB | Colour, hat, lantern style others see |
-| `lantern-out.progress` | yes | owner | 32 KB | Unlocks, synced between devices |
-| `lantern-out.stats` | server | public | | Key `stats`: `rounds`, `wins`, `village_rounds`, `village_wins`, `hollow_rounds`, `hollow_wins`, `survived` |
+| `graveyard-hollow.profile` | yes | public allowed | 4 KB | Colour, hat, lantern style others see |
+| `graveyard-hollow.progress` | yes | owner | 32 KB | Unlocks, synced between devices |
+| `graveyard-hollow.stats` | server | public | | Key `stats`: `rounds`, `wins`, `village_rounds`, `village_wins`, `hollow_rounds`, `hollow_wins`, `survived` |
 
-Leaderboards (server-written): `lantern-out.wins` (all time) and
-`lantern-out.wins_weekly` (resets Monday 00:00 UTC).
+Leaderboards (server-written): `graveyard-hollow.wins` (all time) and
+`graveyard-hollow.wins_weekly` (resets Monday 00:00 UTC).
 
 The host's device keeps every secret role and sends each player only what that
 player may see (`rpc_id` to one peer). When a round ends, the host reports it:
 
 ```
-lantern-out.round_report {
+graveyard-hollow.round_report {
   "match_id": "<bridge.match_id>",
   "round": 3,
   "winner": "village",
@@ -383,7 +383,7 @@ lantern-out.round_report {
 ```
 
 `players` lists signed-in players only, not bots. The server checks the room
-is a Lantern Out room, the caller opened it (for rooms joined by code; in
+is a Graveyard Hollow room, the caller opened it (for rooms joined by code; in
 quick-match rooms, any player in the room may report), every listed player is
 in the room now, and the round number wasn't already reported. Then it updates
 each player's stats and the winners' leaderboard records. `team` and `winner`

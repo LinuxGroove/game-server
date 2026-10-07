@@ -22,7 +22,7 @@ flowchart LR
 ## For game developers
 
 - [Game API](docs/game-api.md): logging in with a game id, errors, every
-  RPC, rooms and the relay protocol, and the Lantern Out module.
+  RPC, rooms and the relay protocol, and the Graveyard Hollow module.
 - [Adding a game](docs/adding-a-game.md): register a new game and its server
   logic.
 

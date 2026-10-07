@@ -75,7 +75,7 @@ change affects. `snap get linuxgroove-game-server` shows the current values.
 | `blobs.internal-endpoint` | | Endpoint the server itself uses, if different from the public one |
 | `shares.hide-threshold` | `5` | Player reports that hide a share until an admin clears it |
 
-Game ids in `games.*` use dashes as in the game id (`games.lantern-out.motd`).
+Game ids in `games.*` use dashes as in the game id (`games.graveyard-hollow.motd`).
 
 ## Secrets
 

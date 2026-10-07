@@ -1,14 +1,14 @@
-// Lantern Out: social deduction for 4-10 players (game-ideas, idea 14).
+// Graveyard Hollow: social deduction for 4-10 players (game-ideas, idea 14).
 //
 // Online play uses bridge rooms: Godot's high-level multiplayer over Nakama
-// relayed matches named "lantern-out:<CODE>", the same game code as LAN. The
+// relayed matches named "graveyard-hollow:<CODE>", the same game code as LAN. The
 // host's device runs the round, holds every secret role, and sends each
 // player only what that player may see. The server never sees roles until the
 // host reports the result at the end of a round.
 
-const GAME_LANTERN_OUT: Registry.GameDef = {
-  id: "lantern-out",
-  name: "Lantern Out",
+const GAME_GRAVEYARD_HOLLOW: Registry.GameDef = {
+  id: "graveyard-hollow",
+  name: "Graveyard Hollow",
   minVersion: "0.1.0",
   latestVersion: "0.1.0",
   enabledByDefault: true,
@@ -32,7 +32,7 @@ const GAME_LANTERN_OUT: Registry.GameDef = {
   rooms: { transport: "bridge", minPlayers: 4, maxPlayers: 10, tickRate: 20, mode: "host", matchmaking: true, hostGraceSec: 20 },
 };
 
-namespace LanternOut {
+namespace GraveyardHollow {
   export const STATS_KEY = "stats";
   export const TEAMS = ["village", "hollow"];
 
@@ -43,8 +43,8 @@ namespace LanternOut {
   }
 
   export function parsePlayers(raw: any): ReportedPlayer[] {
-    if (!Array.isArray(raw) || raw.length < 1 || raw.length > GAME_LANTERN_OUT.rooms!.maxPlayers) {
-      return Util.fail(Code.INVALID_ARGUMENT, "players must list 1 to " + GAME_LANTERN_OUT.rooms!.maxPlayers + " players");
+    if (!Array.isArray(raw) || raw.length < 1 || raw.length > GAME_GRAVEYARD_HOLLOW.rooms!.maxPlayers) {
+      return Util.fail(Code.INVALID_ARGUMENT, "players must list 1 to " + GAME_GRAVEYARD_HOLLOW.rooms!.maxPlayers + " players");
     }
     const out: ReportedPlayer[] = [];
     const seen: { [id: string]: boolean } = {};
@@ -82,26 +82,26 @@ namespace LanternOut {
 }
 
 /**
- * lantern-out.round_report — the host reports a finished round. Bots are
+ * graveyard-hollow.round_report — the host reports a finished round. Bots are
  * left out of `players`; only signed-in players are credited.
  * {match_id, round, winner: "village"|"hollow", players: [{user_id, team, survived}]}
  * -> {recorded}
  */
-function rpcLanternOutRoundReport(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkruntime.Nakama, payload: string): string {
+function rpcGraveyardHollowRoundReport(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkruntime.Nakama, payload: string): string {
   const userId = Util.requireUser(ctx);
   const game = Registry.forSession(ctx);
-  if (game.id !== GAME_LANTERN_OUT.id) {
-    return Util.fail(Code.PERMISSION_DENIED, "wrong_game: this call is for Lantern Out sessions");
+  if (game.id !== GAME_GRAVEYARD_HOLLOW.id) {
+    return Util.fail(Code.PERMISSION_DENIED, "wrong_game: this call is for Graveyard Hollow sessions");
   }
   const req = Util.parsePayload(payload);
   const matchId = Util.str(req, "match_id", 128, true);
   const round = Util.int(req, "round", 1, 1000);
   const winner = Util.str(req, "winner", 16, true);
-  if (LanternOut.TEAMS.indexOf(winner) < 0) {
+  if (GraveyardHollow.TEAMS.indexOf(winner) < 0) {
     return Util.fail(Code.INVALID_ARGUMENT, "winner must be village or hollow");
   }
-  const players = LanternOut.parsePlayers(req["players"]);
-  RateLimit.check(nk, userId, "lantern-out.round_report", 30, 3600);
+  const players = GraveyardHollow.parsePlayers(req["players"]);
+  RateLimit.check(nk, userId, "graveyard-hollow.round_report", 30, 3600);
 
   const roster = Rooms.roster(nk, game, matchId);
   if (roster.host !== "" && roster.host !== userId) {
@@ -118,7 +118,7 @@ function rpcLanternOutRoundReport(ctx: nkruntime.Context, logger: nkruntime.Logg
 
   // Rooms live in memory and end within hours, so an in-memory marker is
   // enough to stop the same round being counted twice.
-  const marker = "lantern-out:round:" + matchId + ":" + round;
+  const marker = "graveyard-hollow:round:" + matchId + ":" + round;
   if (nk.localcacheGet(marker)) {
     return Util.fail(Code.ALREADY_EXISTS, "already_reported: round " + round + " was already recorded");
   }
@@ -137,14 +137,14 @@ function rpcLanternOutRoundReport(ctx: nkruntime.Context, logger: nkruntime.Logg
   for (let i = 0; i < players.length; i++) {
     const p = players[i];
     const won = p.team === winner;
-    Objects.update(nk, game.id + ".stats", LanternOut.STATS_KEY, p.user_id, 2, function (current) {
-      return LanternOut.addRound(current, p.team, won, p.survived);
+    Objects.update(nk, game.id + ".stats", GraveyardHollow.STATS_KEY, p.user_id, 2, function (current) {
+      return GraveyardHollow.addRound(current, p.team, won, p.survived);
     });
     if (won) {
       Leaderboards.write(nk, game, "wins", p.user_id, usernames[p.user_id] || "", 1, 0, undefined);
       Leaderboards.write(nk, game, "wins_weekly", p.user_id, usernames[p.user_id] || "", 1, 0, undefined);
     }
   }
-  logger.info("Lantern Out round %d in %s: %s won, %d players", round, matchId, winner, players.length);
+  logger.info("Graveyard Hollow round %d in %s: %s won, %d players", round, matchId, winner, players.length);
   return JSON.stringify({ recorded: players.length });
 }

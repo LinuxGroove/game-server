@@ -56,7 +56,7 @@ function InitModule(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkrunt
   initializer.registerMatchmakerMatched(matchmakerMatched);
 
   // Game modules.
-  initializer.registerRpc("lantern-out.round_report", rpcLanternOutRoundReport);
+  initializer.registerRpc("graveyard-hollow.round_report", rpcGraveyardHollowRoundReport);
 
   Leaderboards.createAll(ctx, logger, nk);
 
