@@ -52,8 +52,12 @@ namespace Telemetry {
   /** Platforms reported as themselves; anything else is "other". */
   export const PLATFORMS = ["linux", "ubuntu", "ubuntu-core", "steamos", "windows", "macos", "android", "ios", "web"];
 
-  /** Distinct client versions tracked per game before the rest become "other". */
-  export const MAX_VERSIONS = 16;
+  /**
+   * Distinct client versions tracked per game before the rest become "other".
+   * Games version edge builds by commit (2026.41.0+3.g1a2b3c4d), so this
+   * leaves room for a busy week of edge builds between server restarts.
+   */
+  export const MAX_VERSIONS = 64;
 
   /** Per-player activity, one object per game: {first, last} as YYYY-MM-DD. */
   export const ACTIVITY = "core.activity";

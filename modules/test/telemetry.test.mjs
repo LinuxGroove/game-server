@@ -44,14 +44,19 @@ test("logins are counted per game, version, platform and method", () => {
 test("client versions can't create unlimited labels", () => {
   const nk = fakeNk();
   const labels = [];
-  for (let i = 0; i < 40; i++) {
-    labels.push(g.Telemetry.versionLabel(nk, "sandbox", "1.0." + i));
+  // Edge builds: every commit is a new version.
+  const edge = (i) => `2026.41.0+${i}.g${(0x1a2b3c4d + i).toString(16)}`;
+  const n = g.Telemetry.MAX_VERSIONS + 10;
+  for (let i = 0; i < n; i++) {
+    labels.push(g.Telemetry.versionLabel(nk, "sandbox", edge(i)));
   }
   assert.equal(new Set(labels).size, g.Telemetry.MAX_VERSIONS + 1);
-  assert.equal(labels[39], "other");
-  assert.equal(g.Telemetry.versionLabel(nk, "sandbox", "1.0.3"), "1.0.3", "already-seen versions keep their label");
+  assert.equal(labels[n - 1], "other");
+  assert.equal(labels[3], edge(3), "edge builds keep their full version");
+  assert.equal(g.Telemetry.versionLabel(nk, "sandbox", edge(3)), edge(3), "already-seen versions keep their label");
+  assert.equal(g.Telemetry.versionLabel(nk, "sandbox", "v2026.41.0"), "unknown", "no leading v");
   assert.equal(g.Telemetry.versionLabel(nk, "sandbox", "not a version"), "unknown");
-  assert.equal(g.Telemetry.versionLabel(nk, "graveyard-hollow", "1.0.39"), "1.0.39", "the limit is per game");
+  assert.equal(g.Telemetry.versionLabel(nk, "graveyard-hollow", edge(n - 1)), edge(n - 1), "the limit is per game");
 });
 
 test("daily actives, new players and retention count once per player per day", () => {

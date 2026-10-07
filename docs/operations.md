@@ -269,7 +269,8 @@ metrics, all prefixed `nakama_custom_`:
 Daily actives for a day are `increase(nakama_custom_active_players[1d])` over
 that UTC day; D1 retention is the day's `returning_players{day="d1"}` over
 the previous day's `new_players`. Label values come only from the game
-registry and fixed lists (a client's 17th distinct version becomes `other`),
+registry and fixed lists (a game's 65th distinct version since the server
+started becomes `other`),
 so a client can't create unlimited series. The exporter rewrites label values
 to letters, digits and `_`, so `graveyard-hollow` shows as `graveyard_hollow`
 and `0.1.0` as `0_1_0`. Counters start at zero on every restart, which

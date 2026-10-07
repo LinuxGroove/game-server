@@ -60,6 +60,22 @@ test("per-server env overrides enable games and raise the minimum version", () =
   assert.throws(() => g.Auth.checkVars(on, { game: "sandbox", version: "1.1.0", extra: "x" }), (e) => /^bad_vars/.test(e.message));
 });
 
+test("game versions: YYYY.WW.MINOR releases and edge builds sign in", () => {
+  const vars = (version) => ({ game: "graveyard-hollow", version });
+  const c = ctx(vars("2026.41.0"));
+  for (const v of ["2026.41.0", "2026.41.12", "2026.41.0+3.g1a2b3c4d", "2026.1.0+120.g0badcafe"]) {
+    g.Auth.checkVars(c, vars(v));
+  }
+  for (const v of ["v2026.41.0", "2026.41.0-3-g1a2b3c4d x", "2026.41.0+" + "x".repeat(30)]) {
+    assert.throws(() => g.Auth.checkVars(c, vars(v)), (e) => /^bad_(version|vars)/.test(e.message), v);
+  }
+  // Build metadata doesn't count when comparing; weeks compare as numbers.
+  assert.equal(g.Util.compareVersions("2026.41.0+3.g1a2b3c4d", "2026.41.0"), 0);
+  assert.equal(g.Util.compareVersions("2026.9.0", "2026.41.0"), -1);
+  assert.equal(g.Util.compareVersions("2027.1.0", "2026.52.3"), 1);
+  assert.equal(g.Util.compareVersions("2026.41.0", "0.1.0"), 1, "new versions pass the old 0.1.0 minimum");
+});
+
 test("rate limits refuse calls past the limit", () => {
   const nk = fakeNk();
   for (let i = 0; i < 3; i++) g.RateLimit.check(nk, "u1", "test", 3, 60);

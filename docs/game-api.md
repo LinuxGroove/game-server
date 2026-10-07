@@ -48,7 +48,7 @@ game's data the session can touch.
 | Var | Required | Value |
 | --- | --- | --- |
 | `game` | yes | The game id, for example `graveyard-hollow` |
-| `version` | yes | The client version, `MAJOR.MINOR.PATCH` |
+| `version` | yes | The client version, `MAJOR.MINOR.PATCH` with optional `+build` metadata. LinuxGroove games use `YYYY.WW.MINOR` (year and week of the release, with weeks running Sunday to Saturday and numbered like ISO weeks), and edge builds add the commits since it and the commit, like `2026.41.0+3.g1a2b3c4d`. Metadata is ignored when comparing versions |
 | `platform` | no | For stats: `linux`, `ubuntu`, `ubuntu-core`, `steamos`, `windows`, `macos`, `android`, `ios` or `web` (others count as `other`) |
 
 No other vars are accepted. Device authentication is the default: generate a

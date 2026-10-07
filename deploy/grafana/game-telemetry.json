@@ -254,7 +254,7 @@
       },
       "options": {},
       "interval": "1h",
-      "description": "Versions show with underscores (0_1_0): Nakama's metrics exporter rewrites label values."
+      "description": "Versions show with underscores (2026_41_0_3_g1a2b3c4d): Nakama's metrics exporter rewrites label values. The table below lists them."
     },
     {
       "type": "piechart",
@@ -347,6 +347,65 @@
       "description": "update_required spikes after raising a game's min-version; unknown_game means a client asks for a game this server doesn't run."
     },
     {
+      "type": "table",
+      "title": "Versions played (last 7 days)",
+      "id": 19,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sort_desc(sum by (game, version) (increase(nakama_custom_logins{game=~\"$game\"}[7d])) > 0)",
+          "format": "table",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "game": "Game",
+              "version": "Version",
+              "Value": "Logins"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Logins",
+            "desc": true
+          }
+        ]
+      },
+      "description": "Every version that signed in this week. Releases are YYYY.WW.MINOR (2026_41_0); edge builds add the commits since that release and the commit (2026_41_0_3_g1a2b3c4d). Underscores replace dots and + because Nakama's metrics exporter rewrites label values. A server keeps the first 64 versions per game since it started; later ones count as other."
+    },
+    {
       "type": "row",
       "title": "Online play",
       "id": 8,
@@ -355,7 +414,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 17
+        "y": 25
       },
       "panels": []
     },
@@ -371,7 +430,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 18
+        "y": 26
       },
       "targets": [
         {
@@ -424,7 +483,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 18
+        "y": 26
       },
       "targets": [
         {
@@ -477,7 +536,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 18
+        "y": 26
       },
       "targets": [
         {
@@ -519,7 +578,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 26
+        "y": 34
       },
       "targets": [
         {
@@ -563,7 +622,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 26
+        "y": 34
       },
       "targets": [
         {
@@ -616,7 +675,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 26
+        "y": 34
       },
       "targets": [
         {
@@ -660,7 +719,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 34
+        "y": 42
       },
       "panels": []
     },
@@ -676,7 +735,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 35
+        "y": 43
       },
       "targets": [
         {
@@ -718,7 +777,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 35
+        "y": 43
       },
       "targets": [
         {
@@ -771,7 +830,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 35
+        "y": 43
       },
       "targets": [
         {
