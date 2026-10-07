@@ -1,0 +1,10 @@
+#!/bin/bash
+# Open psql on the bundled database as its superuser.
+#   sudo linuxgroove-game-server.psql
+. "$SNAP/bin/common.sh"
+if ! uses_bundled_db; then
+  echo "This node uses an external database." >&2
+  exit 1
+fi
+export HOME="$SNAP_USER_COMMON"
+PGPASSWORD="$(secret_get postgres-password)" exec "$PG_BIN/psql" -h 127.0.0.1 -p "$(db_port)" -U postgres -d nakama -P pager=off "$@"

@@ -1,0 +1,11 @@
+#!/bin/bash
+# Service (oneshot, after postgres): create Nakama's role and database in the
+# bundled PostgreSQL. Runs on database-only nodes too, so remote API nodes
+# find them ready.
+. "$SNAP/bin/common.sh"
+
+if ! uses_bundled_db; then
+  exit 0
+fi
+ensure_secrets
+ensure_nakama_db

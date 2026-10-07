@@ -1,0 +1,184 @@
+name: linuxgroove-game-server
+base: core24
+version: "0.1.0"
+summary: Online services shared by every LinuxGroove game
+description: |
+  One self-hosted backend for all LinuxGroove games: player accounts,
+  leaderboards, cloud saves, share codes, ghost and replay uploads, and
+  online rooms that relay host-authoritative multiplayer.
+
+  Built on Nakama (Apache-2.0) and PostgreSQL, with optional automatic HTTPS
+  through Caddy. One node runs everything by default; set `role` to split the
+  database onto its own machine as the player base grows.
+
+  Quick start:
+
+      sudo snap install linuxgroove-game-server
+      sudo linuxgroove-game-server.info
+
+  Public server with HTTPS:
+
+      sudo snap set linuxgroove-game-server domain=api.example.org server-key=<key the games ship>
+
+  Docs: https://github.com/LinuxGroove/game-server
+license: Apache-2.0
+website: https://github.com/LinuxGroove/game-server
+source-code: https://github.com/LinuxGroove/game-server
+issues: https://github.com/LinuxGroove/game-server/issues
+grade: stable
+confinement: strict
+
+platforms:
+  amd64:
+  arm64:
+
+# PostgreSQL refuses to run as root, and Nakama doesn't need to, so both drop
+# to snapd's shared unprivileged system user.
+system-usernames:
+  snap_daemon: shared
+
+hooks:
+  pre-refresh:
+    plugs: [network]
+
+apps:
+  postgres:
+    command: bin/launch-postgres
+    daemon: simple
+    restart-condition: on-failure
+    # SIGINT is PostgreSQL's "fast" shutdown: roll back clients, then stop.
+    stop-mode: sigint
+    stop-timeout: 60s
+    plugs: [network, network-bind]
+
+  db-setup:
+    command: bin/db-setup
+    daemon: oneshot
+    after: [postgres]
+    plugs: [network]
+
+  nakama:
+    command: bin/launch-nakama
+    daemon: simple
+    after: [postgres, db-setup]
+    restart-condition: on-failure
+    restart-delay: 5s
+    stop-timeout: 30s
+    plugs: [network, network-bind]
+
+  proxy:
+    command: bin/launch-proxy
+    daemon: simple
+    after: [nakama]
+    install-mode: disable
+    restart-condition: on-failure
+    plugs: [network, network-bind]
+
+  backup-timer:
+    command: bin/backup --timer
+    daemon: oneshot
+    timer: 03:00-04:00
+    plugs: [network]
+
+  backup:
+    command: bin/backup
+    plugs: [network]
+
+  restore:
+    command: bin/restore
+    plugs: [network]
+
+  psql:
+    command: bin/psql-admin
+    plugs: [network]
+
+  info:
+    command: bin/info
+
+  secret:
+    command: bin/secret
+
+parts:
+  modules:
+    plugin: nil
+    source: modules
+    build-snaps: [node/22/stable]
+    override-build: |
+      npm ci --no-audit --no-fund
+      npm run build
+      install -D -m 0644 build/index.js "$CRAFT_PART_INSTALL/modules/index.js"
+      for f in LICENSE NOTICE; do
+        install -D -m 0644 "$CRAFT_PROJECT_DIR/$f" "$CRAFT_PART_INSTALL/usr/share/doc/linuxgroove-game-server/$f"
+      done
+
+  nakama:
+    plugin: nil
+    source: https://github.com/heroiclabs/nakama.git
+    source-tag: v3.41.0
+    source-depth: 1
+    # Nakama's go.mod pins its Go version; the go command fetches it if needed.
+    build-snaps: [go/latest/stable]
+    build-packages: [gcc, libc6-dev, git]
+    override-build: |
+      export CGO_ENABLED=1 GOTOOLCHAIN=auto
+      mod=mod
+      if [ -d vendor ]; then mod=vendor; fi
+      go build -mod="$mod" -trimpath \
+        -ldflags "-s -w -X main.version=3.41.0 -X main.commitID=$(git rev-parse --short HEAD)" \
+        -o "$CRAFT_PART_INSTALL/bin/nakama" .
+      install -D -m 0644 LICENSE "$CRAFT_PART_INSTALL/usr/share/doc/nakama/LICENSE"
+
+  caddy:
+    plugin: nil
+    build-snaps: [go/latest/stable]
+    override-build: |
+      export CGO_ENABLED=0 GOTOOLCHAIN=auto GOBIN="$CRAFT_PART_INSTALL/bin"
+      go install -trimpath -ldflags "-s -w" github.com/caddyserver/caddy/v2/cmd/caddy@v2.11.7
+
+  postgres:
+    plugin: nil
+    stage-packages:
+      - postgresql-16
+      - postgresql-client-16
+    # Keep the server and the few client tools the scripts use. Leave out
+    # JIT (LLVM, over 100 MB) and the Perl cluster wrappers.
+    stage:
+      - usr/lib/postgresql/16/bin/postgres
+      - usr/lib/postgresql/16/bin/initdb
+      - usr/lib/postgresql/16/bin/pg_isready
+      - usr/lib/postgresql/16/bin/psql
+      - usr/lib/postgresql/16/bin/pg_dump
+      - usr/lib/postgresql/16/bin/pg_restore
+      - usr/lib/postgresql/16/lib
+      - -usr/lib/postgresql/16/lib/llvmjit*
+      - -usr/lib/postgresql/16/lib/bitcode
+      - usr/share/postgresql/16
+      - usr/lib/*/lib*.so*
+      - -usr/lib/*/libLLVM*
+      - -usr/lib/*/perl*
+      - usr/share/doc/postgresql-16/copyright
+
+  # jq for reading snap config, setpriv to drop to snap_daemon.
+  tools:
+    plugin: nil
+    stage-packages: [jq, util-linux]
+    stage:
+      - usr/bin/jq
+      - usr/bin/setpriv
+      - usr/lib/*/libjq.so*
+      - usr/lib/*/libonig.so*
+      - usr/lib/*/libcap-ng.so*
+      - usr/share/doc/jq/copyright
+      - usr/share/doc/util-linux/copyright
+
+  scripts:
+    plugin: dump
+    source: snap/local
+    organize:
+      "*": bin/
+
+  config:
+    plugin: dump
+    source: config
+    organize:
+      "*": config/

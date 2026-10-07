@@ -1,0 +1,31 @@
+#!/bin/bash
+# Service: Caddy in front of Nakama, with automatic HTTPS for `domain`.
+# Only enabled when `snap set ... domain=api.example.org` is set.
+. "$SNAP/bin/common.sh"
+
+domain="$(cfg domain)"
+if [ -z "$domain" ] || [ "$(role)" = "database" ]; then
+  log "No domain set; the HTTPS proxy is off."
+  exit 0
+fi
+
+mkdir -p "$SNAP_COMMON/caddy" "$SNAP_DATA/caddy"
+email="$(cfg proxy.email)"
+{
+  echo "{"
+  echo "	admin off"
+  if [ -n "$email" ]; then
+    echo "	email $email"
+  fi
+  echo "}"
+  echo ""
+  echo "$domain {"
+  echo "	encode zstd gzip"
+  echo "	reverse_proxy 127.0.0.1:$(cfg api.port 7350)"
+  echo "}"
+} >"$SNAP_DATA/caddy/Caddyfile"
+
+export XDG_DATA_HOME="$SNAP_COMMON/caddy"
+export XDG_CONFIG_HOME="$SNAP_DATA/caddy"
+export HOME="$SNAP_COMMON/caddy"
+exec "$SNAP/bin/caddy" run --config "$SNAP_DATA/caddy/Caddyfile" --adapter caddyfile

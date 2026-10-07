@@ -1,0 +1,120 @@
+#!/bin/bash
+# Validate settings, switch services on or off for the node's role, and
+# restart the services whose settings changed.
+. "$SNAP/bin/common.sh"
+
+fail() {
+  echo "$*" >&2
+  exit 1
+}
+
+check_port() {
+  local v
+  v="$(cfg "$1" "$2")"
+  if ! [[ "$v" =~ ^[0-9]+$ ]] || [ "$v" -gt 65535 ] || { [ "$v" -lt 1 ] && [ "$3" != "zero-ok" ]; }; then
+    fail "$1 must be a port number (got '$v')"
+  fi
+}
+
+r="$(role)"
+case "$r" in
+  all | api | database) ;;
+  *) fail "role must be all, api or database (got '$r')" ;;
+esac
+check_port api.port 7350
+check_port console.port 7351
+check_port postgres.port 5432
+check_port metrics.port 0 zero-ok
+
+case "$(cfg log-level info)" in
+  debug | info | warn | error) ;;
+  *) fail "log-level must be debug, info, warn or error" ;;
+esac
+
+key="$(cfg server-key defaultkey)"
+if ! [[ "$key" =~ ^[A-Za-z0-9._~-]{1,128}$ ]]; then
+  fail "server-key must be 1-128 letters, digits, '.', '_', '~' or '-'"
+fi
+
+domain="$(cfg domain)"
+if [ -n "$domain" ] && ! [[ "$domain" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]]; then
+  fail "domain must be a host name like api.example.org"
+fi
+
+for k in postgres.listen-address console.address api.address; do
+  v="$(cfg "$k")"
+  if [ -n "$v" ] && ! [[ "$v" =~ ^[0-9A-Fa-f.:]+$ ]]; then
+    fail "$k must be an IP address"
+  fi
+done
+
+cidrs="$(cfg postgres.allowed-cidrs)"
+if [ -n "$cidrs" ] && ! [[ "$cidrs" =~ ^[0-9A-Fa-f.:/,\ ]+$ ]]; then
+  fail "postgres.allowed-cidrs must be a comma-separated list like 10.0.0.0/24"
+fi
+
+days="$(cfg backup.keep-days 7)"
+if ! [[ "$days" =~ ^[0-9]+$ ]] || [ "$days" -lt 1 ]; then
+  fail "backup.keep-days must be a whole number of days"
+fi
+
+bad_games="$(snapctl get -d games 2>/dev/null | jq -r '
+  (.games // {}) | to_entries[] | .key as $g |
+  if ($g | test("^[a-z][a-z0-9-]*$") | not) then "game id \($g)"
+  else (.value // {} | keys[] | select(IN("enabled", "min-version", "latest-version", "motd") | not) | "games.\($g).\(.)")
+  end' || true)"
+if [ -n "$bad_games" ]; then
+  fail "Unknown game settings: $(echo "$bad_games" | tr '\n' ' ')(allowed: games.<id>.enabled, min-version, latest-version, motd)"
+fi
+
+if [ "$r" = "api" ] && [ -z "$(external_db_url)" ]; then
+  fail "role=api needs an external database. Set it first:
+  echo -n 'nakama:<password>@<db host>:5432/nakama?sslmode=require' | sudo $SNAP_INSTANCE_NAME.secret set database-url"
+fi
+
+ensure_secrets
+
+# Switch services on or off for this node's role.
+svc() {
+  local name="$1" want="$2"
+  if [ "$want" = "on" ]; then
+    snapctl start --enable "$SNAP_INSTANCE_NAME.$name"
+  else
+    snapctl stop --disable "$SNAP_INSTANCE_NAME.$name"
+  fi
+}
+if uses_bundled_db; then
+  svc postgres on
+  svc db-setup on
+else
+  svc postgres off
+  svc db-setup off
+fi
+if [ "$r" != "database" ]; then svc nakama on; else svc nakama off; fi
+if [ -n "$domain" ] && [ "$r" != "database" ]; then svc proxy on; else svc proxy off; fi
+
+# Restart a running service only when its settings changed. (A restart would
+# also start a stopped service, so stopped ones are left alone; they read
+# their settings when they next start.)
+applied="$SNAP_DATA/applied"
+mkdir -p "$applied"
+is_active() {
+  [ "$(snapctl services "$SNAP_INSTANCE_NAME.$1" 2>/dev/null | awk 'NR == 2 { print $3 }')" = "active" ]
+}
+restart_if_changed() {
+  local name="$1" sum
+  shift
+  sum="$(
+    {
+      for key in "$@"; do snapctl get -d "$key" 2>/dev/null || true; done
+      cat "$SECRETS/database-url" "$SECRETS/s3-secret-access-key" 2>/dev/null || true
+    } | sha256sum | cut -d' ' -f1
+  )"
+  if [ -f "$applied/$name" ] && [ "$(cat "$applied/$name")" != "$sum" ] && is_active "$name"; then
+    snapctl restart "$SNAP_INSTANCE_NAME.$name"
+  fi
+  echo "$sum" >"$applied/$name"
+}
+restart_if_changed postgres role postgres
+restart_if_changed nakama role server-key domain api console log-level metrics games blobs shares node-name postgres.port
+restart_if_changed proxy role domain proxy api

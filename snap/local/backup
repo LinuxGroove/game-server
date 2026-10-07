@@ -1,0 +1,32 @@
+#!/bin/bash
+# Dump the bundled database to $SNAP_COMMON/backups and prune old dumps.
+#   sudo linuxgroove-game-server.backup
+# The nightly timer runs this too, unless backup.enabled=false.
+. "$SNAP/bin/common.sh"
+
+if [ "${1:-}" = "--timer" ] && [ "$(cfg backup.enabled true)" != "true" ]; then
+  log "Nightly backups are off (backup.enabled=false)."
+  exit 0
+fi
+if ! uses_bundled_db; then
+  log "This node uses an external database; back it up where it runs."
+  exit 0
+fi
+
+umask 077
+mkdir -p "$BACKUP_DIR"
+chmod 0700 "$BACKUP_DIR"
+# The caller's working directory (often a home directory) is outside what the
+# snap may read, and find needs to open it.
+cd "$BACKUP_DIR" || exit 1
+keep_days="$(cfg backup.keep-days 7)"
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+out="$BACKUP_DIR/nakama-$stamp.dump"
+
+wait_for_postgres
+PGPASSWORD="$(secret_get postgres-password)" "$PG_BIN/pg_dump" -h 127.0.0.1 -p "$(db_port)" -U postgres \
+  --format=custom --compress=6 --file="$out.partial" nakama
+mv "$out.partial" "$out"
+echo "Wrote $out ($(du -h "$out" | cut -f1))"
+
+find "$BACKUP_DIR" -name 'nakama-*.dump' -mtime +"$keep_days" -print -delete

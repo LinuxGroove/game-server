@@ -1,0 +1,47 @@
+# Base Nakama configuration shared by every deployment (snap and Compose).
+#
+# Deployment-specific settings (database address, keys, runtime env) come
+# from a second config file or command-line flags, which override this one.
+# Reference: https://heroiclabs.com/docs/nakama/getting-started/configuration/
+
+name: game-server
+shutdown_grace_sec: 10
+
+logger:
+  level: info
+  stdout: true
+  format: json
+
+session:
+  # Clients refresh sessions in the background; offline-first games keep a
+  # refresh token for a month so returning players log in silently.
+  token_expiry_sec: 7200
+  refresh_token_expiry_sec: 2592000
+
+socket:
+  port: 7350
+  max_request_size_bytes: 262144
+  max_message_size_bytes: 65536
+  outgoing_queue_size: 64
+
+database:
+  max_open_conns: 50
+  max_idle_conns: 25
+  conn_max_lifetime_ms: 3600000
+
+runtime:
+  js_entrypoint: index.js
+  js_min_count: 8
+  js_max_count: 64
+
+match:
+  input_queue_size: 256
+  call_queue_size: 128
+  join_attempt_queue_size: 64
+  deferred_queue_size: 128
+
+console:
+  port: 7351
+
+metrics:
+  prometheus_port: 0

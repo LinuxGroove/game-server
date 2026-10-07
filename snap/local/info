@@ -1,0 +1,39 @@
+#!/bin/bash
+# Show how to reach this server and the admin console.
+#   sudo linuxgroove-game-server.info
+. "$SNAP/bin/common.sh"
+ensure_secrets
+domain="$(cfg domain)"
+port="$(cfg api.port 7350)"
+echo "Role:            $(role)"
+if [ "$(role)" != "database" ]; then
+  if [ -n "$domain" ]; then
+    echo "Game API:        https://$domain (port 443)"
+  else
+    addr="$(api_address)"
+    if [ "$addr" = "0.0.0.0" ] || [ "$addr" = "::" ]; then
+      addr="<this server's address>"
+    fi
+    echo "Game API:        http://$addr:$port"
+  fi
+  echo "Server key:      $(cfg server-key defaultkey)"
+  echo "Health check:    curl http://127.0.0.1:$port/healthcheck"
+  echo "Admin console:   http://$(cfg console.address 127.0.0.1):$(cfg console.port 7351)"
+  echo "                 user operator, password $(secret_get console-password)"
+  echo "                 from elsewhere: ssh -L 7351:127.0.0.1:$(cfg console.port 7351) <this server>"
+  echo "Runtime HTTP key: $(secret_get runtime-http-key)"
+fi
+if uses_bundled_db; then
+  echo "Database:        bundled PostgreSQL $PG_MAJOR on $(cfg postgres.listen-address 127.0.0.1):$(db_port)"
+  if [ "$(role)" = "database" ]; then
+    echo "                 nakama password: $(secret_get nakama-db-password)"
+  fi
+  echo "Backups:         $BACKUP_DIR (keep $(cfg backup.keep-days 7) days)"
+else
+  echo "Database:        external (secret database-url)"
+fi
+if [ -n "$(cfg blobs.endpoint)" ] && [ -n "$(secret_get s3-secret-access-key)" ]; then
+  echo "Blobs:           $(cfg blobs.endpoint), bucket $(cfg blobs.bucket)"
+else
+  echo "Blobs:           off (set blobs.* and the s3-secret-access-key secret)"
+fi

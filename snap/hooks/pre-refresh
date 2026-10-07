@@ -1,0 +1,9 @@
+#!/bin/bash
+# Dump the database before every refresh, since a new Nakama version may
+# migrate the schema forward. Best effort: a failed dump never blocks an
+# update, it just shows up in the logs.
+. "$SNAP/bin/common.sh"
+
+if ! "$SNAP/bin/backup"; then
+  log "Pre-refresh backup failed; continuing with the refresh."
+fi
