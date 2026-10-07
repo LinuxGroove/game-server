@@ -5,6 +5,7 @@
 ensure_secrets
 domain="$(cfg domain)"
 port="$(cfg api.port 7350)"
+echo "Version:         $SNAP_VERSION"
 echo "Role:            $(role)"
 if [ "$(role)" != "database" ]; then
   if [ -n "$domain" ]; then

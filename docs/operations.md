@@ -235,6 +235,31 @@ To run modified modules without rebuilding the snap, put a built `index.js` in
 `/var/snap/linuxgroove-game-server/common/modules/` and restart; delete it to
 go back to the bundled ones.
 
+### Versions and channels
+
+The snap uses the LinuxGroove games' version scheme. Releases are tagged
+`vYYYY.WW.MINOR`: the year and week (weeks run Sunday to Saturday, UTC,
+numbered like ISO weeks), then a number from 0 for that week's releases.
+Every push to `main` is published to `edge` as the last release plus the
+commits since it and the commit, like `2026.41.0+3.g1a2b3c4d`
+(`tools/version.sh` works it out, and CI stamps it into `snapcraft.yaml`).
+`linuxgroove-game-server.info` shows the running version.
+
+Releases are made with the **Release** workflow (Actions, Release, Run
+workflow). It refuses a commit whose CI hasn't passed, picks the next version
+by itself, publishes a GitHub release whose notes point at the Snap Store and
+list the changes since the last release (`tools/release.sh`), and starts the
+**Snap** workflow on the tag, which publishes that build to `candidate`.
+Promote it to `stable` in the Snap Store once it has run well:
+
+```sh
+sudo snap refresh linuxgroove-game-server --candidate   # try a release
+sudo snap refresh linuxgroove-game-server --edge        # follow main
+```
+
+Publishing needs the snap registered in the Snap Store and a `STORE_LOGIN`
+secret in the repository (`snapcraft export-login`).
+
 ## Monitoring
 
 - `GET /healthcheck` on the API port (or `https://<domain>/healthcheck`):

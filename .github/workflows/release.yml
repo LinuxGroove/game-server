@@ -1,0 +1,81 @@
+name: Release
+
+# Run by hand (Actions, Release, Run workflow). It tags the commit with the
+# next version, vYYYY.WW.MINOR: this week's first release is .0 and each
+# later one that week adds 1, with no way to pick it by hand. Weeks run
+# Sunday to Saturday (see tools/release.sh). Then it
+# publishes a GitHub release whose notes point people at the Snap Store and
+# list what changed, and starts the snap workflow on the tag, which publishes
+# that build to the candidate channel.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch or commit to release
+        default: main
+      highlights:
+        description: A few sentences for the top of the notes (optional)
+        required: false
+
+permissions:
+  contents: write  # create the tag and the release
+  actions: write   # start the snap workflow
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+      - name: Check the commit
+        id: commit
+        run: |
+          sha=$(git rev-parse HEAD)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          if tag=$(git describe --tags --exact-match --match 'v[0-9][0-9][0-9][0-9].*' HEAD 2>/dev/null); then
+            echo "::error::$sha is already released as $tag"
+            exit 1
+          fi
+          # Only release a commit whose tests passed.
+          ci=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$sha&per_page=1" -q '.workflow_runs[0].conclusion // "none"')
+          if [ "$ci" != "success" ]; then
+            echo "::error::CI for $sha is '$ci', not 'success'. Wait for it to pass, or fix it first."
+            exit 1
+          fi
+      - name: Pick the version
+        id: version
+        run: |
+          # Every tag on GitHub right now, in case a release was made since
+          # the checkout (runs of this workflow also queue, never overlap).
+          git fetch --tags --force --quiet origin
+          tag=$(tools/release.sh next-version)
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "::error::$tag already exists"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Write the notes
+        env:
+          HIGHLIGHTS: ${{ inputs.highlights }}
+        run: |
+          tools/release.sh notes "${{ steps.version.outputs.tag }}" "$HIGHLIGHTS" > notes.md
+          cat notes.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish the release
+        run: |
+          title="$(sed -n 's/^title: *//p' snap/snapcraft.yaml) ${{ steps.version.outputs.tag }}"
+          gh release create "${{ steps.version.outputs.tag }}" \
+            --target "${{ steps.commit.outputs.sha }}" \
+            --title "$title" \
+            --notes-file notes.md
+      # A release made with this workflow's token doesn't start other
+      # workflows, so start the snap build on the new tag directly.
+      - name: Build and publish the snap
+        run: gh workflow run snap.yml --ref "${{ steps.version.outputs.tag }}"

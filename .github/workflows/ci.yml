@@ -61,6 +61,11 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # The same version snap.yml publishes (see tools/version.sh).
+      - name: Stamp the version
+        run: echo "Version $(tools/version.sh --stamp)"
       - uses: snapcore/action-build@v1
         id: build
       - uses: actions/upload-artifact@v4

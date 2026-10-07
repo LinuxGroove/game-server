@@ -1,0 +1,60 @@
+name: Snap
+
+# Builds and publishes the snap: every push to main goes to edge, and every
+# release to candidate. Pull requests are built and tested by CI instead.
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+  # The release workflow starts this on the new tag (a release it creates
+  # doesn't fire the release event).
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  snap:
+    name: Build the snap (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Every commit and tag, so tools/version.sh can describe this one.
+          fetch-depth: 0
+      # Releases are tagged vYYYY.WW.MINOR; other builds are that plus the
+      # commits since it and the commit (2026.41.0+3.g1a2b3c4d), written into
+      # snap/snapcraft.yaml.
+      - name: Stamp the version
+        run: echo "Version $(tools/version.sh --stamp)"
+      - uses: snapcore/action-build@v1
+        id: build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linuxgroove-game-server-snap-${{ matrix.arch }}
+          path: ${{ steps.build.outputs.snap }}
+      - name: Publish to the candidate channel
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.ref_type == 'tag')
+        uses: snapcore/action-publish@v1
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.STORE_LOGIN }}
+        with:
+          snap: ${{ steps.build.outputs.snap }}
+          release: candidate
+      - name: Publish to the edge channel
+        if: github.event_name == 'push'
+        uses: snapcore/action-publish@v1
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.STORE_LOGIN }}
+        with:
+          snap: ${{ steps.build.outputs.snap }}
+          release: edge

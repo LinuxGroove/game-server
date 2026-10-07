@@ -1,5 +1,7 @@
 name: linuxgroove-game-server
+title: LinuxGroove game server
 base: core24
+# Stamped by tools/version.sh --stamp in CI; this is only a fallback.
 version: "0.1.0"
 summary: Online services shared by every LinuxGroove game
 description: |
