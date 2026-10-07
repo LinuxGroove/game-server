@@ -31,6 +31,7 @@ work without a server.
 - [Online rooms](#online-rooms)
 - [Account deletion and export](#account-deletion-and-export)
 - [Graveyard Hollow](#graveyard-hollow)
+- [Foam Frenzy](#foam-frenzy)
 - [Sandbox test game](#sandbox-test-game)
 
 ## Connecting
@@ -393,6 +394,38 @@ quick-match rooms, any player in the room may report), every listed player is
 in the room now, and the round number wasn't already reported. Then it updates
 each player's stats and the winners' leaderboard records. `team` and `winner`
 are `village` or `hollow`.
+
+## Foam Frenzy
+
+Game id `foam-frenzy`. Bridge rooms named `foam-frenzy:<CODE>` for 2–8
+players, with quick match. No free-text chat.
+
+| Collection | Client writes | Read | Max | Use |
+| --- | --- | --- | --- | --- |
+| `foam-frenzy.profile` | yes | public allowed | 4 KB | Camper look and colours others see |
+| `foam-frenzy.progress` | yes | owner | 32 KB | Unlocks and preferences, synced between devices |
+| `foam-frenzy.stats` | server | public | | Key `stats`: `matches`, `wins`, `tags`, `outs`, `captures`, and `<mode>_matches`, `<mode>_wins` per mode |
+
+Leaderboards (server-written): `foam-frenzy.wins` (all time),
+`foam-frenzy.wins_weekly` (resets Monday 00:00 UTC) and `foam-frenzy.tags`
+(campers tagged, all time).
+
+When a match ends, the host reports it:
+
+```
+foam-frenzy.match_report {
+  "match_id": "<bridge.match_id>",
+  "round": 2,
+  "mode": "ctf",
+  "players": [{"user_id": "...", "tags": 6, "outs": 2, "captures": 1, "won": true}, ...]
+}
+-> {"recorded": 4}
+```
+
+`players` lists each device's signed-in player, not bots or couch guests.
+`mode` is `ffa`, `teams`, `ctf` or `hoarder`; `tags` and `outs` are 0–500 and
+`captures` 0–100. The server makes the same checks as for Graveyard Hollow
+round reports, then updates each player's stats and the leaderboards.
 
 ## Sandbox test game
 

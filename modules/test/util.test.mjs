@@ -34,6 +34,7 @@ test("the shipped game registry is valid", () => {
   assert.deepEqual(Array.from(g.Registry.validateAll()), []);
   const ids = Array.from(g.Registry.GAMES, (x) => x.id);
   assert.ok(ids.includes("graveyard-hollow"), ids.join(", "));
+  assert.ok(ids.includes("foam-frenzy"), ids.join(", "));
   assert.ok(ids.includes("sandbox"), ids.join(", "));
 });
 
@@ -95,4 +96,25 @@ test("graveyard-hollow stats accumulate per team", () => {
   let s = g.GraveyardHollow.addRound(null, "village", true, true);
   s = g.GraveyardHollow.addRound(s, "hollow", false, false);
   assert.deepEqual({ ...s }, { rounds: 2, wins: 1, village_rounds: 1, village_wins: 1, hollow_rounds: 1, hollow_wins: 0, survived: 1 });
+});
+
+test("foam-frenzy stats accumulate per mode", () => {
+  let s = g.FoamFrenzy.addMatch(null, "ffa", { tags: 7, outs: 3, captures: 0, won: true });
+  s = g.FoamFrenzy.addMatch(s, "ctf", { tags: 2, outs: 5, captures: 1, won: false });
+  assert.deepEqual(
+    { ...s },
+    { matches: 2, wins: 1, ffa_matches: 1, ffa_wins: 1, ctf_matches: 1, ctf_wins: 0, tags: 9, outs: 8, captures: 1 },
+  );
+});
+
+test("foam-frenzy match reports reject impossible players", () => {
+  const ok = g.FoamFrenzy.parsePlayers([{ user_id: "a", tags: 3, won: true }, { user_id: "b" }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(ok)), [
+    { user_id: "a", tags: 3, outs: 0, captures: 0, won: true },
+    { user_id: "b", tags: 0, outs: 0, captures: 0, won: false },
+  ]);
+  assert.throws(() => g.FoamFrenzy.parsePlayers([]), (e) => /players must list/.test(e.message));
+  assert.throws(() => g.FoamFrenzy.parsePlayers([{ user_id: "a" }, { user_id: "a" }]), (e) => /duplicate/.test(e.message));
+  assert.throws(() => g.FoamFrenzy.parsePlayers([{ user_id: "a", tags: 100000 }]), (e) => /tags must be between/.test(e.message));
+  assert.throws(() => g.FoamFrenzy.parsePlayers(Array.from({ length: 9 }, (_, i) => ({ user_id: "u" + i }))), (e) => /1 to 8/.test(e.message));
 });

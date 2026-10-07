@@ -32,6 +32,7 @@
     "./src/core/account.ts",
     "./src/core/config.ts",
     "./src/games/graveyard-hollow.ts",
+    "./src/games/foam-frenzy.ts",
     "./src/games/sandbox.ts",
     "./src/games/index.ts",
     "./src/main.ts"

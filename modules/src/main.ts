@@ -62,6 +62,7 @@ function InitModule(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkrunt
 
   // Game modules.
   initializer.registerRpc("graveyard-hollow.round_report", rpcGraveyardHollowRoundReport);
+  initializer.registerRpc("foam-frenzy.match_report", rpcFoamFrenzyMatchReport);
 
   Leaderboards.createAll(ctx, logger, nk);
   Telemetry.init(ctx, nk);

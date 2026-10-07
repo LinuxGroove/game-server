@@ -525,6 +525,45 @@ async function main() {
     assert.equal(Number(board.owner_records[0].score), 1);
     for (const s of sockets) s.close();
   });
+  await step("foam-frenzy hosts report matches into stats and leaderboards", async () => {
+    const name = "foam-frenzy:" + code();
+    const players = [];
+    const sockets = [];
+    let matchId = "";
+    for (let i = 0; i < 2; i++) {
+      const p = await login("foam-frenzy", "0.1.0");
+      const s = await new Socket(p).connect();
+      matchId = (await createNamed(s, name)).match_id;
+      players.push(p);
+      sockets.push(s);
+    }
+    const host = players[0];
+    const report = {
+      match_id: matchId,
+      round: 1,
+      mode: "ffa",
+      players: [
+        { user_id: players[0].userId, tags: 6, outs: 2, captures: 0, won: true },
+        { user_id: players[1].userId, tags: 2, outs: 6, captures: 0, won: false },
+      ],
+    };
+    await expectError(rpc(players[1], "foam-frenzy.match_report", report), 403, "not_host");
+    await expectError(rpc(host, "foam-frenzy.match_report", { ...report, mode: "golf" }), 400);
+    assert.equal((await rpc(host, "foam-frenzy.match_report", report)).recorded, 2);
+    await expectError(rpc(host, "foam-frenzy.match_report", report), 409, "already_reported");
+    const gh = await login("graveyard-hollow", "0.1.0");
+    await expectError(rpc(gh, "foam-frenzy.match_report", report), 403, "wrong_game");
+    const stats = await http("POST", "/v2/storage", {
+      token: players[1].token,
+      body: { object_ids: [{ collection: "foam-frenzy.stats", key: "stats", user_id: host.userId }] },
+    });
+    const v = JSON.parse(stats.objects[0].value);
+    assert.equal(v.ffa_wins, 1);
+    assert.equal(v.tags, 6);
+    const board = await http("GET", `/v2/leaderboard/foam-frenzy.tags?owner_ids=${host.userId}`, { token: host.token });
+    assert.equal(Number(board.owner_records[0].score), 6);
+    for (const s of sockets) s.close();
+  });
 
   // Account lifecycle.
   await step("players can export and delete their account", async () => {
