@@ -1,5 +1,6 @@
 // Game telemetry: Prometheus counters for logins, daily players, retention,
-// rooms, rounds and feature use, per game.
+// rooms, rounds and feature use, per game. Launch pings from every player,
+// signed in or not, are counted in launches.ts with the same helpers.
 //
 // Nakama exposes these on its metrics port (snap setting metrics.port) next
 // to its own metrics. Telemetry must never break a game, so every write is
@@ -47,6 +48,18 @@ namespace Telemetry {
     SHARE_REPORTS: "share_reports",
     // game
     ACCOUNT_DELETIONS: "account_deletions",
+    // game, version, os, os_version, arch: every launch ping (launches.ts)
+    LAUNCHES: "launches",
+    // game: an install's first launch of the UTC day (daily players, signed in or not)
+    LAUNCH_PLAYERS: "launch_players",
+    // game, os, arch: the same, by system
+    LAUNCH_SYSTEMS: "launch_systems",
+    // game: an install's first launch ever
+    NEW_INSTALLS: "new_installs",
+    // game, day (d1|d7|d30): launched again exactly N days after its first day
+    RETURNING_INSTALLS: "returning_installs",
+    // game (gauge): every install ever seen
+    INSTALLS: "installs",
   };
 
   /** Platforms reported as themselves; anything else is "other". */
@@ -63,7 +76,7 @@ namespace Telemetry {
   export const ACTIVITY = "core.activity";
 
   /** Days after a player's first day that count as "returning". */
-  const RETURN_DAYS = [1, 7, 30];
+  export const RETURN_DAYS = [1, 7, 30];
 
   /**
    * Register each enabled game's per-game counters at 0 on startup.
@@ -97,6 +110,15 @@ namespace Telemetry {
   export function count(nk: nkruntime.Nakama, name: string, tags: { [key: string]: string }, delta?: number): void {
     try {
       nk.metricsCounterAdd(name, tags, delta === undefined ? 1 : delta);
+    } catch (e) {
+      // Metrics are best effort.
+    }
+  }
+
+  /** Set a gauge. Never throws. */
+  export function gauge(nk: nkruntime.Nakama, name: string, tags: { [key: string]: string }, value: number): void {
+    try {
+      nk.metricsGaugeSet(name, tags, value);
     } catch (e) {
       // Metrics are best effort.
     }

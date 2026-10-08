@@ -21,9 +21,9 @@ flowchart LR
 
 ## For game developers
 
-- [Game API](docs/game-api.md): logging in with a game id, errors, every
-  RPC, rooms and the relay protocol, and the Graveyard Hollow and Foam Frenzy
-  modules.
+- [Game API](docs/game-api.md): logging in with a game id, launch pings,
+  errors, every RPC, rooms and the relay protocol, and the Graveyard Hollow and
+  Foam Frenzy modules.
 - [Adding a game](docs/adding-a-game.md): register a new game and its server
   logic.
 
@@ -32,7 +32,7 @@ Run a local server with the test game turned on:
 ```sh
 (cd modules && npm ci && npm run build)
 docker compose -f deploy/compose/compose.yaml up -d --wait
-node scripts/smoke-test.mjs        # 35 end-to-end checks
+node scripts/smoke-test.mjs        # 40 end-to-end checks
 ```
 
 The server is then at `http://127.0.0.1:7350` with server key `defaultkey`,
@@ -58,7 +58,7 @@ restore, splitting the database onto its own machine, updates and monitoring.
 | Path | What |
 | --- | --- |
 | `modules/` | Nakama runtime modules in TypeScript, built to one `index.js` |
-| `modules/src/core/` | Shared services: login checks, namespacing guards, leaderboards, storage, share codes, blobs, rooms and the relay match |
+| `modules/src/core/` | Shared services: login checks, namespacing guards, launch pings and telemetry, leaderboards, storage, share codes, blobs, rooms and the relay match |
 | `modules/src/games/` | One file per game: its definition and any game-specific RPCs |
 | `modules/test/` | Unit tests (Node's test runner, no server needed) |
 | `config/nakama.yml` | Base Nakama settings shared by the snap and Compose |
@@ -83,6 +83,10 @@ restore, splitting the database onto its own machine, updates and monitoring.
 - **Scales by steps.** Everything on one machine first; then the database on
   its own machine (`role=database` and `role=api`), or a managed PostgreSQL;
   big files always go to object storage, never through Nakama.
+- **Players counted, not tracked.** Games ping `/launch` when they start,
+  with a random install id, version, OS and CPU, so daily and total players
+  include people who never go online. The server keeps only each install's
+  first and last day, and metrics count per game.
 - **Secrets stay out of snap settings**, which every local user can read.
   Session keys, database passwords and the object storage key live in a
   root-only directory in the snap's data. (The server key isn't a secret: it

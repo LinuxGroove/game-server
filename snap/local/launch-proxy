@@ -11,6 +11,8 @@ fi
 
 mkdir -p "$SNAP_COMMON/caddy" "$SNAP_DATA/caddy"
 email="$(cfg proxy.email)"
+# The Caddyfile holds the runtime HTTP key, so only root may read it.
+umask 077
 {
   echo "{"
   echo "	admin off"
@@ -21,7 +23,15 @@ email="$(cfg proxy.email)"
   echo ""
   echo "$domain {"
   echo "	encode zstd gzip"
-  echo "	reverse_proxy 127.0.0.1:$(cfg api.port 7350)"
+  echo "	# Launch pings from games that haven't signed in (core.launch). Only"
+  echo "	# this route carries the runtime HTTP key, so it never ships in a game."
+  echo "	handle /launch {"
+  echo "		rewrite * /v2/rpc/core.launch?http_key=$(secret_get runtime-http-key)&unwrap"
+  echo "		reverse_proxy 127.0.0.1:$(cfg api.port 7350)"
+  echo "	}"
+  echo "	handle {"
+  echo "		reverse_proxy 127.0.0.1:$(cfg api.port 7350)"
+  echo "	}"
   echo "}"
 } >"$SNAP_DATA/caddy/Caddyfile"
 

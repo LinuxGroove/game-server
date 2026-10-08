@@ -60,6 +60,10 @@ What each part gives the game is in [game-api.md](game-api.md). Notes:
   host leaves. Set `rooms: null` for games without online play.
 - **chat** turns on Nakama's free-text chat channels. Leave it off unless the
   game has moderation planned.
+- **Launch pings** ([game-api.md](game-api.md#launch-pings)) only count for
+  registered games, so register a game before its first release even when it
+  has no online features: empty lists and `rooms: null`, like
+  [tiptoe.ts](../modules/src/games/tiptoe.ts).
 
 ## 2. Register it
 

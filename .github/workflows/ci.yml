@@ -45,16 +45,18 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           npm run build
-      - name: Start PostgreSQL and Nakama
-        run: docker compose -f deploy/compose/compose.yaml up -d --wait
+      # Caddy over plain HTTP, so the smoke test can send a launch ping
+      # through its /launch route.
+      - name: Start PostgreSQL, Nakama and Caddy
+        run: DOMAIN=http://localhost docker compose -f deploy/compose/compose.yaml --profile https up -d --wait
       - name: Smoke test
-        run: node scripts/smoke-test.mjs
+        run: LAUNCH_URL=http://localhost/launch node scripts/smoke-test.mjs
       - name: Server logs
         if: failure()
-        run: docker compose -f deploy/compose/compose.yaml logs
+        run: docker compose -f deploy/compose/compose.yaml --profile https logs
       - name: Stop
         if: always()
-        run: docker compose -f deploy/compose/compose.yaml down -v
+        run: docker compose -f deploy/compose/compose.yaml --profile https down -v
 
   snap:
     name: Snap build, install and end to end
@@ -116,7 +118,10 @@ jobs:
         with:
           node-version: 22
       - name: Smoke test, including blob uploads
-        run: BLOB_TEST=1 node scripts/smoke-test.mjs
+        run: |
+          HTTP_KEY="$(sudo linuxgroove-game-server.info | sed -n 's/^Runtime HTTP key: //p')"
+          export HTTP_KEY
+          BLOB_TEST=1 node scripts/smoke-test.mjs
       - name: Admin commands
         run: |
           sudo linuxgroove-game-server.info
@@ -146,6 +151,8 @@ jobs:
             if curl -sf http://127.0.0.1:7350/healthcheck; then break; fi
             sleep 2
           done
+          HTTP_KEY="$(sudo linuxgroove-game-server.info | sed -n 's/^Runtime HTTP key: //p')"
+          export HTTP_KEY
           BLOB_TEST=1 node scripts/smoke-test.mjs
 
       - name: Snap logs and confinement denials
