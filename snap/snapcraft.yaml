@@ -65,7 +65,6 @@ apps:
     after: [postgres, db-setup]
     restart-condition: on-failure
     restart-delay: 5s
-    stop-timeout: 30s
     plugs: [network, network-bind]
 
   proxy:
@@ -74,6 +73,9 @@ apps:
     after: [nakama]
     install-mode: disable
     restart-condition: on-failure
+    # When ports 80 or 443 are taken, keep retrying instead of hitting
+    # systemd's start limit within a second and staying down.
+    restart-delay: 5s
     plugs: [network, network-bind]
 
   backup-timer:
