@@ -108,6 +108,12 @@ the server first. Open only:
 Without a domain, players connect to port 7350 over plain HTTP, which is fine
 on a LAN or for testing but not for a public server.
 
+Caddy listens on 80 and 443 on every address, so nothing else on the machine
+may use those ports, not even on one address such as a Tailscale one. If
+another program has them, the proxy keeps retrying every few seconds and
+`snap logs linuxgroove-game-server.proxy` says `address already in use`;
+players can't connect until the port is free again.
+
 Caddy also serves `POST /launch`, the games' [launch pings](game-api.md#launch-pings),
 by calling the `core.launch` RPC with the runtime HTTP key, which is why its
 generated Caddyfile is readable by root only. A server without a domain has no
@@ -121,6 +127,13 @@ localhost. Reach it through an SSH tunnel:
 ```sh
 ssh -L 7351:127.0.0.1:7351 you@server
 # then open http://127.0.0.1:7351, user "operator", password from .info
+```
+
+Or serve it on your tailnet, on a port other than 443 (see above):
+
+```sh
+sudo tailscale serve --bg --https=8443 http://127.0.0.1:7351
+# then open https://<machine>.<tailnet>.ts.net:8443
 ```
 
 Clear a share hidden by reports by editing its `core.share_codes` object
