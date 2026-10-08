@@ -22,6 +22,7 @@ Games stay offline-first: every call here is optional, and the game should
 work without a server.
 
 - [Connecting](#connecting)
+- [Launch pings](#launch-pings)
 - [Errors](#errors)
 - [core.config](#coreconfig)
 - [Storage](#storage-saves-profiles-settings)
@@ -75,6 +76,48 @@ When `version` is older than the game's minimum, login fails with
 server admin can raise the minimum without a server release (`snap set …
 games.<id>.min-version=…`).
 
+## Launch pings
+
+Each time a game starts it can tell the server, whether or not the player ever
+signs in, so the server counts daily and total players of every game and the
+systems and versions they play on. It needs no session:
+
+```
+POST https://<domain>/launch
+{"game": "foam-frenzy", "install": "9f2c41d07b6e4a1c8d3e5f60a1b2c3d4",
+ "version": "2026.41.1+3.g1a2b3c4d", "os": "Linux", "distro": "Ubuntu 24.04.5 LTS",
+ "os_version": "24.04", "arch": "arm64"}
+-> {}
+```
+
+| Field | Required | Value |
+| --- | --- | --- |
+| `game` | yes | The game id; it must be registered and enabled on the server |
+| `install` | yes | 32 lower-case hex digits: random, made on the game's first run and kept in `user://`, never derived from the hardware or an account |
+| `version` | yes | As the `version` session var |
+| `os` | no | Godot's `OS.get_name()`: `Linux`, `Windows`, `macOS`, ... |
+| `distro` | no | `OS.get_distribution_name()`. Inside a snap this is the snap's base, `Ubuntu Core` |
+| `os_version` | no | `OS.get_version()` |
+| `arch` | no | `Engine.get_architecture_name()`: `x86_64`, `arm64`, ... |
+
+`/launch` is a Caddy route that calls the `core.launch` RPC with the server's
+runtime HTTP key, so the key never ships in a game. A server without a domain
+(local development) has no `/launch`; call
+`/v2/rpc/core.launch?http_key=<key>&unwrap` there instead. Every other RPC
+refuses calls without a session, so the key opens nothing else.
+
+Send it once per launch, in the background with a short timeout, and ignore
+the answer: when the server can't be reached, nothing happens. Don't send it
+when the `DO_NOT_TRACK` environment variable is set, in headless runs (tests
+and CI) or when running from source. The shared Godot add-on's
+`LGLaunchPing.send(game_id)` does all of that.
+
+The server keeps only the first and last UTC day of each install
+(`core.installs`, readable only by the server), never the address, and counts
+launches and players in its [metrics](operations.md#game-telemetry). One
+address may send 30 pings a minute (then `rate_limited`) and add 20 new
+installs an hour; more are answered but not counted.
+
 ## Errors
 
 Errors carry a gRPC status code (an HTTP status over REST) and a message that
@@ -99,6 +142,7 @@ Match on the part before the colon. Reasons:
 | `rate_limited` | 429 | Slow down and try later |
 | `blobs_disabled` | 503 | The server has no object storage configured |
 | `unknown_kind`, `bad_content_type`, `bad_key` | 400 | Bad blob or share request |
+| `bad_install` | 400 | A launch ping's install id isn't 32 lower-case hex digits |
 | `not_owner` | 403 | Only the creator can delete it |
 | `storage_error`, `no_code` | 503 | Temporary, retry |
 | `share_not_found`, `share_hidden` | 404 | No share with that code (or hidden after reports) |
@@ -364,7 +408,8 @@ player as JSON. Offer both in the game's settings.
 For player counts the server also keeps, per player and game, the first and
 last UTC day they logged in (`core.activity`, readable only by the server).
 It is deleted with the account and included in the export. Server metrics
-count players and events per game, never individual players.
+count players and events per game, never individual players. Launch pings
+aren't tied to accounts, so they aren't part of either.
 
 ## Graveyard Hollow
 

@@ -24,9 +24,14 @@ export function fakeNk() {
   const cache = new Map();
   const storage = new Map();
   const metrics = [];
+  const gauges = new Map();
   return {
     metrics,
+    gauges,
     metricsCounterAdd: (name, tags, delta) => metrics.push({ name, tags: { ...tags }, delta }),
+    metricsGaugeSet: (name, tags, value) => gauges.set(`${name}${JSON.stringify(tags)}`, value),
+    /** A gauge's value, by name and tags. */
+    gauge: (name, tags) => gauges.get(`${name}${JSON.stringify(tags)}`),
     /** Sum of a counter, optionally only where every given tag matches. */
     counter(name, where = {}) {
       return metrics

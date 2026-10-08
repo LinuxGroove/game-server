@@ -18,6 +18,7 @@
     "./src/core/registry.ts",
     "./src/core/ratelimit.ts",
     "./src/core/telemetry.ts",
+    "./src/core/launches.ts",
     "./src/core/sha256.ts",
     "./src/core/sha1.ts",
     "./src/core/s3.ts",
@@ -33,6 +34,8 @@
     "./src/core/config.ts",
     "./src/games/graveyard-hollow.ts",
     "./src/games/foam-frenzy.ts",
+    "./src/games/tiptoe.ts",
+    "./src/games/joyride-junction.ts",
     "./src/games/sandbox.ts",
     "./src/games/index.ts",
     "./src/main.ts"

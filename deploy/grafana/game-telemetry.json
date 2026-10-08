@@ -21,7 +21,7 @@
     "to": "now"
   },
   "refresh": "5m",
-  "description": "Per-game players, retention, rooms and feature use from the game server's custom Nakama metrics (docs/operations.md#monitoring).",
+  "description": "Per-game players (everyone who launches, and those who sign in), retention, rooms and feature use from the game server's custom Nakama metrics (docs/operations.md#monitoring).",
   "templating": {
     "list": [
       {
@@ -51,8 +51,8 @@
   "panels": [
     {
       "type": "row",
-      "title": "Players",
-      "id": 1,
+      "title": "Everyone who plays",
+      "id": 20,
       "collapsed": false,
       "gridPos": {
         "h": 1,
@@ -63,8 +63,369 @@
       "panels": []
     },
     {
+      "type": "stat",
+      "title": "Total players",
+      "id": 21,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum by (game) (nakama_custom_installs{game=~\"$game\"})",
+          "legendFormat": "{{game}}",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "value_and_name",
+        "colorMode": "none",
+        "graphMode": "none"
+      },
+      "description": "Every install that has sent a launch ping, per game, read from the database when the server starts. One person on two devices counts twice."
+    },
+    {
       "type": "timeseries",
-      "title": "Daily active players",
+      "title": "Daily players",
+      "id": 22,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 9,
+        "x": 6,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum by (game) (increase(nakama_custom_launch_players{game=~\"$game\"}[1d]))",
+          "legendFormat": "{{game}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {},
+      "interval": "1d",
+      "description": "Installs that started the game at least once that UTC day with the internet on, signed in or not. Players who set DO_NOT_TRACK or play offline aren't counted."
+    },
+    {
+      "type": "timeseries",
+      "title": "New players per day",
+      "id": 23,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 9,
+        "x": 15,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum by (game) (increase(nakama_custom_new_installs{game=~\"$game\"}[1d]))",
+          "legendFormat": "{{game}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {},
+      "interval": "1d",
+      "description": "Installs that started the game for the first time that UTC day."
+    },
+    {
+      "type": "timeseries",
+      "title": "Retention (everyone)",
+      "id": 24,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum by (game) (increase(nakama_custom_returning_installs{game=~\"$game\",day=\"d1\"}[1d])) / sum by (game) (increase(nakama_custom_new_installs{game=~\"$game\"}[1d] offset 1d))",
+          "legendFormat": "d1 {{game}}",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum by (game) (increase(nakama_custom_returning_installs{game=~\"$game\",day=\"d7\"}[1d])) / sum by (game) (increase(nakama_custom_new_installs{game=~\"$game\"}[1d] offset 7d))",
+          "legendFormat": "d7 {{game}}",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum by (game) (increase(nakama_custom_returning_installs{game=~\"$game\",day=\"d30\"}[1d])) / sum by (game) (increase(nakama_custom_new_installs{game=~\"$game\"}[1d] offset 30d))",
+          "legendFormat": "d30 {{game}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "drawStyle": "points",
+            "pointSize": 6
+          }
+        },
+        "overrides": []
+      },
+      "options": {},
+      "interval": "1d",
+      "description": "Share of a day's new installs that started the game again exactly 1, 7 or 30 days later."
+    },
+    {
+      "type": "piechart",
+      "title": "Players by system",
+      "id": 25,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum by (os, arch) (increase(nakama_custom_launch_systems{game=~\"$game\"}[$__range]))",
+          "legendFormat": "{{os}} {{arch}}",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value"
+          ]
+        },
+        "pieType": "donut"
+      },
+      "description": "Player days by OS and CPU over the dashboard's time range. Every snap reports ubuntu_core (its base), whatever the computer runs."
+    },
+    {
+      "type": "timeseries",
+      "title": "Launches by version",
+      "id": 26,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum by (game, version) (increase(nakama_custom_launches{game=~\"$game\"}[$__interval]))",
+          "legendFormat": "{{game}} {{version}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {},
+      "description": "Every launch ping, by game version."
+    },
+    {
+      "type": "table",
+      "title": "Systems and versions launched (last 7 days)",
+      "id": 27,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sort_desc(sum by (game, version, os, os_version, arch) (increase(nakama_custom_launches{game=~\"$game\"}[7d])) > 0)",
+          "format": "table",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "game": "Game",
+              "version": "Version",
+              "os": "OS",
+              "os_version": "OS version",
+              "arch": "CPU",
+              "Value": "Launches"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Launches",
+            "desc": true
+          }
+        ]
+      },
+      "description": "Launches this week by game version, OS and CPU, like Ubuntu 24.04 arm64 2026.41.1. Windows versions show as 10 or 11 and macOS as its major version. Underscores replace dots and + because Nakama's metrics exporter rewrites label values."
+    },
+    {
+      "type": "row",
+      "title": "Signed-in players",
+      "id": 1,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Daily signed-in players",
       "id": 2,
       "datasource": {
         "type": "prometheus",
@@ -74,7 +435,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 1
+        "y": 26
       },
       "targets": [
         {
@@ -117,7 +478,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 1
+        "y": 26
       },
       "targets": [
         {
@@ -160,7 +521,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 1
+        "y": 26
       },
       "targets": [
         {
@@ -225,7 +586,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 9
+        "y": 34
       },
       "targets": [
         {
@@ -268,7 +629,7 @@
         "h": 8,
         "w": 6,
         "x": 12,
-        "y": 9
+        "y": 34
       },
       "targets": [
         {
@@ -315,7 +676,7 @@
         "h": 8,
         "w": 6,
         "x": 18,
-        "y": 9
+        "y": 34
       },
       "targets": [
         {
@@ -358,7 +719,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 17
+        "y": 42
       },
       "targets": [
         {
@@ -414,7 +775,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 25
+        "y": 50
       },
       "panels": []
     },
@@ -430,7 +791,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 26
+        "y": 51
       },
       "targets": [
         {
@@ -483,7 +844,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 26
+        "y": 51
       },
       "targets": [
         {
@@ -536,7 +897,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 26
+        "y": 51
       },
       "targets": [
         {
@@ -578,7 +939,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 34
+        "y": 59
       },
       "targets": [
         {
@@ -622,7 +983,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 34
+        "y": 59
       },
       "targets": [
         {
@@ -675,7 +1036,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 34
+        "y": 59
       },
       "targets": [
         {
@@ -719,7 +1080,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 42
+        "y": 67
       },
       "panels": []
     },
@@ -735,7 +1096,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 43
+        "y": 68
       },
       "targets": [
         {
@@ -777,7 +1138,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 43
+        "y": 68
       },
       "targets": [
         {
@@ -830,7 +1191,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 43
+        "y": 68
       },
       "targets": [
         {

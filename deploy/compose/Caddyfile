@@ -4,5 +4,13 @@
 
 {$DOMAIN} {
 	encode zstd gzip
-	reverse_proxy nakama:7350
+	# Launch pings from games that haven't signed in (core.launch). Only this
+	# route carries the runtime HTTP key, so it never ships in a game.
+	handle /launch {
+		rewrite * /v2/rpc/core.launch?http_key={$RUNTIME_HTTP_KEY}&unwrap
+		reverse_proxy nakama:7350
+	}
+	handle {
+		reverse_proxy nakama:7350
+	}
 }

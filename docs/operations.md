@@ -108,6 +108,11 @@ the server first. Open only:
 Without a domain, players connect to port 7350 over plain HTTP, which is fine
 on a LAN or for testing but not for a public server.
 
+Caddy also serves `POST /launch`, the games' [launch pings](game-api.md#launch-pings),
+by calling the `core.launch` RPC with the runtime HTTP key, which is why its
+generated Caddyfile is readable by root only. A server without a domain has no
+`/launch`, so games pointed at it send no launch pings.
+
 ## Admin console
 
 Nakama's console (players, storage, leaderboards, live matches) listens on
@@ -290,10 +295,23 @@ metrics, all prefixed `nakama_custom_`:
 | `scores_submitted` | game, board | `core.score_submit` calls |
 | `blob_uploads`, `blob_downloads`, `shares_created` | game, kind | Upload and download links handed out, shares made |
 | `shares_opened`, `share_reports`, `account_deletions` | game | |
+| `launches` | game, version, os, os_version, arch | Every [launch ping](game-api.md#launch-pings), signed in or not |
+| `launch_players` | game | An install's first launch of the UTC day (daily players, signed in or not) |
+| `launch_systems` | game, os, arch | The same, by system |
+| `new_installs` | game | An install's first launch |
+| `returning_installs` | game, day | Installs launched again exactly 1, 7 or 30 days after their first day |
+| `installs` (gauge) | game | Every install ever seen, from the database |
 
 Daily actives for a day are `increase(nakama_custom_active_players[1d])` over
 that UTC day; D1 retention is the day's `returning_players{day="d1"}` over
-the previous day's `new_players`. Label values come only from the game
+the previous day's `new_players`. Those count players who sign in, which games
+only do for online play. Launch pings count everyone whose device is online
+when the game starts: daily players are
+`increase(nakama_custom_launch_players[1d])`, and all-time players are
+`nakama_custom_installs`, which is read from the database at startup because
+counters restart at zero. `os` is a fixed list of systems and distributions
+(every snap reports `ubuntu_core`, its base), and `os_version` keeps 16 values
+per game and OS before the rest become `other`. Label values come only from the game
 registry and fixed lists (a game's 65th distinct version since the server
 started becomes `other`),
 so a client can't create unlimited series. The exporter rewrites label values

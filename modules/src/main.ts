@@ -45,6 +45,9 @@ function InitModule(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkrunt
   initializer.registerRpc("core.room_list", rpcRoomList);
   initializer.registerRpc("core.account_delete", rpcAccountDelete);
   initializer.registerRpc("core.account_export", rpcAccountExport);
+  // Launch pings, without a session: only through Caddy's /launch route,
+  // which adds the runtime HTTP key (launches.ts).
+  initializer.registerRpc("core.launch", rpcLaunch);
 
   // Online rooms: named bridge rooms (Nakama relayed matches) and relay rooms.
   initializer.registerRtBefore("MatchCreate", beforeMatchCreate);
@@ -66,6 +69,7 @@ function InitModule(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkrunt
 
   Leaderboards.createAll(ctx, logger, nk);
   Telemetry.init(ctx, nk);
+  Launches.init(ctx, nk);
 
   const enabled: string[] = [];
   for (let i = 0; i < Registry.GAMES.length; i++) {

@@ -77,6 +77,7 @@ services:
     profiles: [https]
     environment:
       DOMAIN: ${DOMAIN:-localhost}
+      RUNTIME_HTTP_KEY: ${RUNTIME_HTTP_KEY:-localdev-http-key}
     ports:
       - "80:80"
       - "443:443"

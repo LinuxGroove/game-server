@@ -6,7 +6,9 @@
 //   SERVER_URL=http://127.0.0.1:7350 SERVER_KEY=defaultkey node scripts/smoke-test.mjs
 //
 // Set BLOB_TEST=1 when the server has object storage configured to also
-// upload and download a blob through pre-signed URLs.
+// upload and download a blob through pre-signed URLs. HTTP_KEY is the
+// server's runtime HTTP key, for launch pings straight to Nakama, and
+// LAUNCH_URL (e.g. http://localhost/launch) also sends one through Caddy.
 
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -14,6 +16,8 @@ import { randomUUID } from "node:crypto";
 const BASE = (process.env.SERVER_URL || "http://127.0.0.1:7350").replace(/\/$/, "");
 const SERVER_KEY = process.env.SERVER_KEY || "defaultkey";
 const BLOB_TEST = process.env.BLOB_TEST === "1";
+const HTTP_KEY = process.env.HTTP_KEY || "localdev-http-key";
+const LAUNCH_URL = process.env.LAUNCH_URL || "";
 const WS_BASE = BASE.replace(/^http/, "ws");
 
 let passed = 0;
@@ -209,6 +213,27 @@ async function main() {
   await step("login without a game is refused", () => expectError(login(null), 400, "missing_game"));
   await step("login for an unknown game is refused", () => expectError(login("no-such-game", "1.0.0"), 400, "unknown_game"));
   await step("login with an old client asks for an update", () => expectError(login("sandbox", "0.9.0"), 400, "update_required"));
+
+  // Launch pings, sent by games without signing in.
+  const install = randomUUID().replace(/-/g, "");
+  const launch = { game: "foam-frenzy", install, version: "2026.41.1+3.g1a2b3c4d", os: "Linux", distro: "Ubuntu 24.04.5 LTS", os_version: "24.04", arch: "arm64" };
+  const sessionless = (id, payload, key = HTTP_KEY) =>
+    http("POST", `/v2/rpc/${id}?unwrap${key ? "&http_key=" + key : ""}`, { body: payload });
+  await step("launch pings are accepted without signing in", async () => {
+    await sessionless("core.launch", launch);
+    await sessionless("core.launch", launch);
+  });
+  await step("launch pings need the HTTP key", () => expectError(sessionless("core.launch", launch, ""), 401));
+  await step("bad launch pings are refused", () => expectError(sessionless("core.launch", { ...launch, install: "nope" }), 400, "bad_install"));
+  await step("the HTTP key opens no other RPC", () => expectError(sessionless("core.config", {}), 401));
+  if (LAUNCH_URL) {
+    await step("launch pings go through Caddy's /launch route", async () => {
+      const res = await fetch(LAUNCH_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(launch) });
+      assert.equal(res.status, 200, await res.text());
+      const bad = await fetch(LAUNCH_URL, { method: "POST", body: JSON.stringify({ ...launch, game: "no-such-game" }) });
+      assert.equal(bad.status, 400);
+    });
+  }
 
   const a = await login("sandbox", "1.1.0");
   const b = await login("sandbox", "1.2.0");
