@@ -142,7 +142,8 @@
             "stacking": {
               "mode": "normal"
             }
-          }
+          },
+          "decimals": 0
         },
         "overrides": []
       },
@@ -185,7 +186,8 @@
             "stacking": {
               "mode": "normal"
             }
-          }
+          },
+          "decimals": 0
         },
         "overrides": []
       },
@@ -279,14 +281,16 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum by (os, arch) (increase(nakama_custom_launch_systems{game=~\"$game\"}[$__range]))",
+          "expr": "sum by (os, arch) (increase(nakama_custom_launch_systems{game=~\"$game\"}[$__range])) > 0",
           "legendFormat": "{{os}} {{arch}}",
           "range": false,
           "instant": true
         }
       ],
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "decimals": 0
+        },
         "overrides": []
       },
       "options": {
@@ -341,7 +345,8 @@
             "stacking": {
               "mode": "normal"
             }
-          }
+          },
+          "decimals": 0
         },
         "overrides": []
       },
@@ -458,7 +463,8 @@
             "stacking": {
               "mode": "normal"
             }
-          }
+          },
+          "decimals": 0
         },
         "overrides": []
       },
@@ -501,7 +507,8 @@
             "stacking": {
               "mode": "normal"
             }
-          }
+          },
+          "decimals": 0
         },
         "overrides": []
       },
@@ -609,7 +616,8 @@
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "decimals": 0
         },
         "overrides": []
       },
@@ -638,14 +646,16 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum by (platform) (increase(nakama_custom_logins{game=~\"$game\"}[$__range]))",
+          "expr": "sum by (platform) (increase(nakama_custom_logins{game=~\"$game\"}[$__range])) > 0",
           "legendFormat": "{{platform}}",
           "range": false,
           "instant": true
         }
       ],
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "decimals": 0
+        },
         "overrides": []
       },
       "options": {
@@ -699,7 +709,8 @@
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "decimals": 0
         },
         "overrides": []
       },
@@ -878,7 +889,8 @@
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "decimals": 0
         },
         "overrides": []
       },
@@ -920,7 +932,8 @@
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "decimals": 0
         },
         "overrides": []
       },
@@ -1045,14 +1058,16 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum by (reason) (increase(nakama_custom_rooms_closed{game=~\"$game\"}[$__range]))",
+          "expr": "sum by (reason) (increase(nakama_custom_rooms_closed{game=~\"$game\"}[$__range])) > 0",
           "legendFormat": "{{reason}}",
           "range": false,
           "instant": true
         }
       ],
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "decimals": 0
+        },
         "overrides": []
       },
       "options": {
@@ -1119,7 +1134,8 @@
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "decimals": 0
         },
         "overrides": []
       },
@@ -1172,7 +1188,8 @@
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "decimals": 0
         },
         "overrides": []
       },
@@ -1247,7 +1264,8 @@
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "decimals": 0
         },
         "overrides": []
       },
