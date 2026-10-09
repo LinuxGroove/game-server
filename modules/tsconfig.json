@@ -36,6 +36,7 @@
     "./src/games/foam-frenzy.ts",
     "./src/games/tiptoe.ts",
     "./src/games/joyride-junction.ts",
+    "./src/games/block-party-skyway.ts",
     "./src/games/sandbox.ts",
     "./src/games/index.ts",
     "./src/main.ts"
