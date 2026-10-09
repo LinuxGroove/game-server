@@ -596,6 +596,50 @@ async function main() {
     assert.equal(Number(board.owner_records[0].score), 6);
     for (const s of sockets) s.close();
   });
+  await step("race-day hosts report races into stats and leaderboards", async () => {
+    const name = "race-day:" + code();
+    const players = [];
+    const sockets = [];
+    let matchId = "";
+    for (let i = 0; i < 2; i++) {
+      const p = await login("race-day", "0.1.0");
+      const s = await new Socket(p).connect();
+      matchId = (await createNamed(s, name)).match_id;
+      players.push(p);
+      sockets.push(s);
+    }
+    const host = players[0];
+    const report = {
+      match_id: matchId,
+      round: 1,
+      circuit: "greenfield",
+      players: [
+        { user_id: players[1].userId, position: 1, won: true, podium: true, pole: true, fastest: false },
+        { user_id: host.userId, position: 2, won: false, podium: true, pole: false, fastest: true },
+      ],
+    };
+    await expectError(rpc(players[1], "race-day.race_report", report), 403, "not_host");
+    await expectError(rpc(host, "race-day.race_report", { ...report, circuit: "monaco" }), 400, "unknown_circuit");
+    const twoWinners = { ...report, players: report.players.map((p) => ({ ...p, position: 1, won: true })) };
+    await expectError(rpc(host, "race-day.race_report", twoWinners), 400, "too_many_winners");
+    assert.equal((await rpc(host, "race-day.race_report", report)).recorded, 2);
+    await expectError(rpc(host, "race-day.race_report", report), 409, "already_reported");
+    const stats = await http("POST", "/v2/storage", {
+      token: host.token,
+      body: { object_ids: [{ collection: "race-day.stats", key: "stats", user_id: players[1].userId }] },
+    });
+    const v = JSON.parse(stats.objects[0].value);
+    assert.deepEqual(v, { races: 1, wins: 1, podiums: 1, poles: 1, fastest_laps: 0, best_finish: 1 });
+    const board = await http("GET", `/v2/leaderboard/race-day.poles?owner_ids=${players[1].userId}`, { token: host.token });
+    assert.equal(Number(board.owner_records[0].score), 1);
+    // Time Trial laps: the best (lowest) lap stays.
+    await rpc(host, "core.score_submit", { board: "lap_greenfield", score: 84250 });
+    await rpc(host, "core.score_submit", { board: "lap_greenfield", score: 91000 });
+    await expectError(rpc(host, "core.score_submit", { board: "lap_greenfield", score: 1000 }), 400);
+    const laps = await http("GET", `/v2/leaderboard/race-day.lap_greenfield?owner_ids=${host.userId}`, { token: host.token });
+    assert.equal(Number(laps.owner_records[0].score), 84250);
+    for (const s of sockets) s.close();
+  });
 
   // Account lifecycle.
   await step("players can export and delete their account", async () => {
