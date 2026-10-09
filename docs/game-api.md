@@ -33,6 +33,7 @@ work without a server.
 - [Account deletion and export](#account-deletion-and-export)
 - [Graveyard Hollow](#graveyard-hollow)
 - [Foam Frenzy](#foam-frenzy)
+- [Race Day](#race-day)
 - [Sandbox test game](#sandbox-test-game)
 
 ## Connecting
@@ -154,7 +155,8 @@ Match on the part before the colon. Reasons:
 | `use_room_rpcs`, `use_named_rooms` | 400 / (socket) | Wrong kind of room for this game |
 | `confirm_required` | 400 | `core.account_delete` needs `{"confirm": "DELETE"}` |
 | `wrong_game`, `not_host`, `not_in_room` | 403/400 | Game module checks (see the game's section) |
-| `too_many_winners` | 400 | A single-winner Foam Frenzy mode reported more than one winner |
+| `too_many_winners` | 400 | A single-winner Foam Frenzy mode reported more than one winner, or a Race Day race more than one winner, pole or fastest lap |
+| `unknown_circuit`, `bad_result` | 400 | A Race Day race report names no known layout, or a result its position can't have |
 | `already_reported` | 409 | That round was already recorded |
 
 ## core.config
@@ -479,6 +481,59 @@ player has `won` (none for a tie), or the report is refused with
 `too_many_winners`; in `teams` and `ctf` every player on the winning team has
 it. The server makes the same checks as for Graveyard Hollow round reports,
 then updates each player's stats and the leaderboards.
+
+## Race Day
+
+Game id `race-day`. Bridge rooms named `race-day:<CODE>` for 2–8 players,
+with quick match. No free-text chat.
+
+| Collection | Client writes | Read | Max | Use |
+| --- | --- | --- | --- | --- |
+| `race-day.stats` | server | public | | Key `stats`: `races`, `wins`, `podiums`, `poles`, `fastest_laps`, and `best_finish` (the best position so far) |
+
+Leaderboards written by the server: `race-day.wins` (all time),
+`race-day.wins_weekly` (resets Monday 00:00 UTC), `race-day.podiums` and
+`race-day.poles` (all time).
+
+Time Trial boards, one per layout, written by the client with
+`core.score_submit`: `race-day.lap_<layout>`, the best lap in milliseconds
+(20000 to 600000, lowest first, kept forever). The layouts are `greenfield`,
+`greenfield_club`, `port_lumen`, `port_lumen_reverse`, `monte_pineta`,
+`monte_pineta_junior`, `ardenwood`, `ardenwood_reverse`, `kingsfield`,
+`kingsfield_international`, `twin_bridges`, `twin_bridges_reverse`,
+`sandhaven`, `sandhaven_reverse`, `neon_marina`, `neon_marina_short`,
+`sierra_alta`, `sierra_alta_reverse`, `lakeside_isle`,
+`lakeside_isle_reverse`, `hay_valley`, `hay_valley_reverse`, `bellwood`,
+`bellwood_oval`, `cliffside`, `cliffside_reverse`, `misty_hills`,
+`misty_hills_reverse`, `redrock_canyon`, `redrock_canyon_national`,
+`harbour_lights`, `harbour_lights_short` and `proving`.
+
+```
+core.score_submit {"board": "lap_port_lumen_reverse", "score": 83456}
+```
+
+When a race ends, the host reports it:
+
+```
+race-day.race_report {
+  "match_id": "<bridge.match_id>",
+  "round": 2,
+  "circuit": "twin_bridges",
+  "players": [{"user_id": "...", "position": 1, "won": true, "podium": true, "pole": false, "fastest": true}, ...]
+}
+-> {"recorded": 4}
+```
+
+`players` lists each device's signed-in player, not AI drivers or
+split-screen guests. `round` counts races in the room from 1. `circuit` is
+one of the layouts above (`-` is read as `_`), or the report is refused with
+`unknown_circuit`. `position` is 1–20. Only position 1 may have `won` and only
+positions 1–3 `podium` (a retired car can be classified there without it), or
+the report is refused with `bad_result`; at most one player has each of
+`won`, `pole` and `fastest`, or it is refused with `too_many_winners`. The
+server makes the same checks as for Graveyard Hollow round reports, then
+updates each player's stats and the `wins`, `wins_weekly`, `podiums` and
+`poles` boards.
 
 ## Sandbox test game
 

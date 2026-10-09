@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { load, fakeNk, ctx } from "./harness.mjs";
+import { load, logger, fakeNk, ctx } from "./harness.mjs";
 
 const g = load();
 
@@ -35,6 +35,7 @@ test("the shipped game registry is valid", () => {
   const ids = Array.from(g.Registry.GAMES, (x) => x.id);
   assert.ok(ids.includes("graveyard-hollow"), ids.join(", "));
   assert.ok(ids.includes("foam-frenzy"), ids.join(", "));
+  assert.ok(ids.includes("race-day"), ids.join(", "));
   assert.ok(ids.includes("sandbox"), ids.join(", "));
 });
 
@@ -145,4 +146,70 @@ test("foam-frenzy match reports reject impossible players", () => {
   const capper = [{ user_id: "a", captures: 3 }];
   assert.equal(g.FoamFrenzy.parsePlayers(capper, "ctf")[0].captures, 3);
   assert.equal(g.FoamFrenzy.parsePlayers(capper, "teams")[0].captures, 0);
+});
+
+test("race-day has a Time Trial board for every layout", () => {
+  const boards = Array.from(g.GAME_RACE_DAY.leaderboards, (b) => ({ ...b }));
+  const laps = boards.filter((b) => b.id.startsWith("lap_"));
+  assert.equal(laps.length, 33);
+  assert.deepEqual(laps.map((b) => b.id.slice(4)), Array.from(g.RACE_DAY_LAYOUTS));
+  for (const b of laps) {
+    assert.deepEqual(
+      { sort: b.sort, operator: b.operator, reset: b.reset, clientSubmit: b.clientSubmit, minScore: b.minScore, maxScore: b.maxScore, enableRank: b.enableRank },
+      { sort: "asc", operator: "best", reset: null, clientSubmit: true, minScore: 20000, maxScore: 600000, enableRank: true },
+      b.id,
+    );
+  }
+  const counts = boards.filter((b) => !b.id.startsWith("lap_"));
+  assert.deepEqual(counts.map((b) => b.id), ["wins", "wins_weekly", "podiums", "poles"]);
+  assert.ok(counts.every((b) => !b.clientSubmit && b.operator === "incr"));
+  assert.equal(counts.find((b) => b.id === "wins_weekly").reset, "0 0 * * 1");
+});
+
+test("race-day Time Trial laps go through core.score_submit", () => {
+  const nk = fakeNk();
+  const written = [];
+  nk.leaderboardRecordWrite = (id, owner, username, score) => {
+    written.push(`${id}/${owner}/${score}`);
+    return { leaderboardId: id, ownerId: owner, score, subscore: 0, rank: 1, updateTime: 0 };
+  };
+  const RACE = ctx({ game: "race-day", version: "2026.41.0" });
+  const submit = (board, score) => g.rpcScoreSubmit(RACE, logger, nk, JSON.stringify({ board, score }));
+  assert.equal(JSON.parse(submit("lap_port_lumen_reverse", 83456)).record.score, 83456);
+  assert.deepEqual(written, ["race-day.lap_port_lumen_reverse/u1/83456"]);
+  assert.throws(() => submit("lap_port_lumen_reverse", 19999), (e) => /between 20000 and 600000/.test(e.message));
+  assert.throws(() => submit("lap_nowhere", 83456), (e) => /^unknown_board/.test(e.message));
+  assert.throws(() => submit("wins", 1), (e) => /^server_only/.test(e.message));
+});
+
+test("race-day stats count races, results and the best finish", () => {
+  let s = g.RaceDay.addRace(null, { position: 4, won: false, podium: false, pole: true, fastest: false });
+  s = g.RaceDay.addRace(s, { position: 1, won: true, podium: true, pole: false, fastest: true });
+  s = g.RaceDay.addRace(s, { position: 7, won: false, podium: false, pole: false, fastest: false });
+  assert.deepEqual({ ...s }, { races: 3, wins: 1, podiums: 1, poles: 1, fastest_laps: 1, best_finish: 1 });
+});
+
+test("race-day race reports reject impossible results", () => {
+  const ok = g.RaceDay.parsePlayers([{ user_id: "a", position: 1, won: true, podium: true, pole: true }, { user_id: "b", position: 5 }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(ok)), [
+    { user_id: "a", position: 1, won: true, podium: true, pole: true, fastest: false },
+    { user_id: "b", position: 5, won: false, podium: false, pole: false, fastest: false },
+  ]);
+  assert.throws(() => g.RaceDay.parsePlayers([]), (e) => /players must list/.test(e.message));
+  assert.throws(() => g.RaceDay.parsePlayers([{ user_id: "a", position: 1 }, { user_id: "a", position: 2 }]), (e) => /duplicate/.test(e.message));
+  assert.throws(() => g.RaceDay.parsePlayers([{ user_id: "a" }]), (e) => /position is required/.test(e.message));
+  assert.throws(() => g.RaceDay.parsePlayers([{ user_id: "a", position: 21 }]), (e) => /between 1 and 20/.test(e.message));
+  assert.throws(() => g.RaceDay.parsePlayers([{ user_id: "a", position: 0 }]), (e) => /between 1 and 20/.test(e.message));
+  assert.throws(() => g.RaceDay.parsePlayers(Array.from({ length: 9 }, (_, i) => ({ user_id: "u" + i, position: i + 1 }))), (e) => /1 to 8/.test(e.message));
+  assert.throws(() => g.RaceDay.parsePlayers([{ user_id: "a", position: 2, won: true }]), (e) => /^bad_result/.test(e.message));
+  assert.throws(() => g.RaceDay.parsePlayers([{ user_id: "a", position: 4, podium: true }]), (e) => /^bad_result/.test(e.message));
+  // A car that retires in a podium place is classified there without the podium.
+  assert.equal(g.RaceDay.parsePlayers([{ user_id: "a", position: 3, podium: false }])[0].podium, false);
+  for (const flag of ["pole", "fastest"]) {
+    const two = [{ user_id: "a", position: 2, [flag]: true }, { user_id: "b", position: 3, [flag]: true }];
+    assert.throws(() => g.RaceDay.parsePlayers(two), (e) => /^too_many_winners/.test(e.message), flag);
+  }
+  assert.equal(g.RaceDay.parseCircuit("kingsfield_international"), "kingsfield_international");
+  assert.equal(g.RaceDay.parseCircuit("port-lumen-reverse"), "port_lumen_reverse");
+  assert.throws(() => g.RaceDay.parseCircuit("monaco"), (e) => /^unknown_circuit/.test(e.message));
 });

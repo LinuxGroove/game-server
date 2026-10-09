@@ -22,8 +22,8 @@ flowchart LR
 ## For game developers
 
 - [Game API](docs/game-api.md): logging in with a game id, launch pings,
-  errors, every RPC, rooms and the relay protocol, and the Graveyard Hollow and
-  Foam Frenzy modules.
+  errors, every RPC, rooms and the relay protocol, and the Graveyard Hollow,
+  Foam Frenzy and Race Day modules.
 - [Adding a game](docs/adding-a-game.md): register a new game and its server
   logic.
 
@@ -32,7 +32,7 @@ Run a local server with the test game turned on:
 ```sh
 (cd modules && npm ci && npm run build)
 docker compose -f deploy/compose/compose.yaml up -d --wait
-node scripts/smoke-test.mjs        # 40 end-to-end checks
+node scripts/smoke-test.mjs        # 41 end-to-end checks
 ```
 
 The server is then at `http://127.0.0.1:7350` with server key `defaultkey`,

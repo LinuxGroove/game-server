@@ -223,3 +223,53 @@ test("foam-frenzy match reports come from the room's host and credit tags and wi
   ]);
   assert.equal(reason(() => report("host", "ffa", players)), "already_reported");
 });
+
+test("race-day race reports come from the room's host and credit wins, podiums and poles", () => {
+  const nk = bridgeNk();
+  const written = [];
+  nk.leaderboardRecordWrite = (id, owner, username, score) => {
+    written.push(`${id}/${owner}/${score}`);
+    return {};
+  };
+  nk.usersGetId = (ids) => ids.map((userId) => ({ userId, username: userId }));
+  const RACE = { game: "race-day", version: "0.1.0" };
+  const name = "race-day:GRID01";
+  for (const u of ["host", "a", "b"]) {
+    create(nk, name, u, RACE);
+    nk.join(name, u);
+  }
+  const matchId = uuidv5dns(name) + ".";
+  const report = (userId, players, extra = {}, vars = RACE) =>
+    g.rpcRaceDayRaceReport(
+      ctx(vars, { userId }),
+      logger,
+      nk,
+      JSON.stringify({ match_id: matchId, round: 1, circuit: "twin_bridges", players, ...extra }),
+    );
+  const players = [
+    { user_id: "a", position: 1, won: true, podium: true, pole: false, fastest: true },
+    { user_id: "host", position: 3, won: false, podium: true, pole: true, fastest: false },
+    { user_id: "b", position: 9, won: false, podium: false, pole: false, fastest: false },
+  ];
+  assert.equal(reason(() => report("host", players, {}, GRAVEYARD)), "wrong_game");
+  assert.equal(reason(() => report("a", players)), "not_host");
+  assert.equal(reason(() => report("host", players, { circuit: "monaco" })), "unknown_circuit");
+  assert.equal(reason(() => report("host", [...players, { user_id: "stranger", position: 12 }])), "not_in_room");
+  assert.equal(reason(() => report("host", [{ ...players[0], position: 21 }])), "position must be between 1 and 20");
+  assert.equal(reason(() => report("host", players.map((p, i) => ({ ...p, position: 1, won: i < 2 })))), "too_many_winners");
+  assert.equal(reason(() => report("host", players)), "ok");
+  assert.deepEqual(written.sort(), [
+    "race-day.podiums/a/1",
+    "race-day.podiums/host/1",
+    "race-day.poles/host/1",
+    "race-day.wins/a/1",
+    "race-day.wins_weekly/a/1",
+  ]);
+  const stats = (u) => ({ ...nk.storage.get(`race-day.stats/stats/${u}`).value });
+  assert.deepEqual(stats("a"), { races: 1, wins: 1, podiums: 1, poles: 0, fastest_laps: 1, best_finish: 1 });
+  assert.deepEqual(stats("b"), { races: 1, wins: 0, podiums: 0, poles: 0, fastest_laps: 0, best_finish: 9 });
+  assert.equal(reason(() => report("host", players)), "already_reported");
+  // The next race in the same room counts, and the best finish only improves.
+  assert.equal(reason(() => report("host", [{ user_id: "b", position: 4 }], { round: 2, circuit: "proving" })), "ok");
+  assert.deepEqual(stats("b"), { races: 2, wins: 0, podiums: 0, poles: 0, fastest_laps: 0, best_finish: 4 });
+});
