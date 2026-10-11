@@ -1,4 +1,4 @@
-// Hull Bloom: a first person horror shooter for one player against an
+// Verdigris Protocol: a first person horror shooter for one player against an
 // alien growth on a space station (game-ideas, idea 21).
 //
 // Shift mode's boards: a night's score on tonight's station (the same seed
@@ -6,9 +6,9 @@
 // UTC and on an all-time board of best nights. The client submits with
 // core.score_submit; a night is three decks, each worth at most about 2,500.
 
-const GAME_HULL_BLOOM: Registry.GameDef = {
-  id: "hull-bloom",
-  name: "Hull Bloom",
+const GAME_VERDIGRIS_PROTOCOL: Registry.GameDef = {
+  id: "verdigris-protocol",
+  name: "Verdigris Protocol",
   minVersion: "0.1.0",
   latestVersion: "0.1.0",
   enabledByDefault: true,
