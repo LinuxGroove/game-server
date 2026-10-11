@@ -36,6 +36,7 @@ test("the shipped game registry is valid", () => {
   assert.ok(ids.includes("graveyard-hollow"), ids.join(", "));
   assert.ok(ids.includes("foam-frenzy"), ids.join(", "));
   assert.ok(ids.includes("race-day"), ids.join(", "));
+  assert.ok(ids.includes("burn-rate"), ids.join(", "));
   assert.ok(ids.includes("sandbox"), ids.join(", "));
 });
 
@@ -212,4 +213,98 @@ test("race-day race reports reject impossible results", () => {
   assert.equal(g.RaceDay.parseCircuit("kingsfield_international"), "kingsfield_international");
   assert.equal(g.RaceDay.parseCircuit("port-lumen-reverse"), "port_lumen_reverse");
   assert.throws(() => g.RaceDay.parseCircuit("monaco"), (e) => /^unknown_circuit/.test(e.message));
+});
+
+test("burn-rate has distance boards per pace, the Daily Flight, wins and a board for every course", () => {
+  const boards = Array.from(g.GAME_BURN_RATE.leaderboards, (b) => ({ ...b }));
+  const ids = boards.map((b) => b.id);
+  for (const pace of ["calm", "normal", "fast"]) {
+    assert.ok(ids.includes("distance_" + pace), pace);
+    assert.ok(ids.includes("distance_classic_" + pace), pace);
+  }
+  const courses = boards.filter((b) => b.id.startsWith("course_"));
+  assert.equal(courses.length, 30);
+  assert.ok(courses.every((b) => b.sort === "asc" && b.operator === "best" && !b.clientSubmit));
+  assert.ok(ids.includes("course_lab_1") && ids.includes("course_halberd_5"));
+  const daily = boards.find((b) => b.id === "daily");
+  assert.equal(daily.reset, "0 0 * * *");
+  assert.equal(boards.find((b) => b.id === "wins").operator, "incr");
+  assert.ok(boards.every((b) => !b.clientSubmit), "every board is written by the server");
+});
+
+test("burn-rate run reports are checked and go on the right board", () => {
+  const run = (extra) => g.BurnRate.parseRun({ mode: "endless", pace: "normal", lanes: true, seed: 7, distance: 1200, credits: 40, best_burn: 3, time_ms: 95000, pack: "k2", ...extra });
+  assert.deepEqual({ ...g.BurnRate.boardFor(run({})) }, { board: "distance_normal", score: 1200 });
+  assert.deepEqual({ ...g.BurnRate.boardFor(run({ lanes: false, pace: "fast" })) }, { board: "distance_classic_fast", score: 1200 });
+  assert.deepEqual({ ...g.BurnRate.boardFor(run({ mode: "daily" })) }, { board: "daily", score: 1200 });
+  assert.deepEqual({ ...g.BurnRate.boardFor(run({ mode: "course", course: "bay_3", finish_ms: 90000 })) }, { board: "course_bay_3", score: 90000 });
+  assert.equal(g.BurnRate.boardFor(run({ mode: "course", course: "bay_3" })), null, "an unfinished course goes on no board");
+  const why = (extra) => {
+    try {
+      run(extra);
+    } catch (err) {
+      return String(err.message).split(":")[0];
+    }
+    return "ok";
+  };
+  assert.equal(why({ mode: "party" }), "bad_mode");
+  assert.equal(why({ pace: "ludicrous" }), "bad_pace");
+  assert.equal(why({ pack: "k9" }), "bad_pack");
+  assert.equal(why({ distance: 5000, time_ms: 60000 }), "too_fast");
+  assert.equal(why({ mode: "course", course: "moon_1", finish_ms: 90000 }), "unknown_course");
+  assert.equal(why({ mode: "course", course: "lab_1", finish_ms: 15000 }), "too_fast");
+  assert.equal(why({ mode: "course", course: "lab_1", finish_ms: 120000 }), "bad_result");
+  assert.equal(why({ best_burn: 6 }), "best_burn must be between 1 and 5");
+  assert.equal(why({ time_ms: 500 }), "time_ms must be between 1000 and 36000000");
+});
+
+test("burn-rate stats count runs, metres, credits and the best distance", () => {
+  const run = (extra) => g.BurnRate.parseRun({ mode: "endless", distance: 800, credits: 10, best_burn: 2, time_ms: 70000, ...extra });
+  let s = g.BurnRate.addRun(null, run({}));
+  s = g.BurnRate.addRun(s, run({ mode: "daily", distance: 1500, credits: 30, best_burn: 4, time_ms: 110000 }));
+  s = g.BurnRate.addRun(s, run({ mode: "course", course: "lab_2", finish_ms: 60000, distance: 800, time_ms: 61000 }));
+  assert.deepEqual({ ...s }, { runs: 3, metres: 3100, credits: 50, seconds: 241, best_distance: 1500, best_burn: 4, daily_runs: 1, courses_finished: 1 });
+  s = g.BurnRate.addRace(s, { rounds: 4, round_wins: 3, won: true });
+  assert.equal(s.races, 1);
+  assert.equal(s.race_wins, 1);
+  assert.equal(s.round_wins, 3);
+});
+
+test("burn-rate party reports reject impossible results", () => {
+  const ok = g.BurnRate.parsePlayers([{ user_id: "a", round_wins: 3, won: true }, { user_id: "b", round_wins: 1 }], 4);
+  assert.deepEqual(JSON.parse(JSON.stringify(ok)), [
+    { user_id: "a", rounds: 4, round_wins: 3, won: true },
+    { user_id: "b", rounds: 4, round_wins: 1, won: false },
+  ]);
+  assert.throws(() => g.BurnRate.parsePlayers([], 3), (e) => /players must list/.test(e.message));
+  assert.throws(() => g.BurnRate.parsePlayers([{ user_id: "a", round_wins: 1 }, { user_id: "a", round_wins: 1 }], 3), (e) => /duplicate/.test(e.message));
+  assert.throws(() => g.BurnRate.parsePlayers([{ user_id: "a", round_wins: 4 }], 3), (e) => /between 0 and 3/.test(e.message));
+  assert.throws(() => g.BurnRate.parsePlayers([{ user_id: "a", round_wins: 2 }, { user_id: "b", round_wins: 2 }], 3), (e) => /^bad_result/.test(e.message));
+  assert.throws(() => g.BurnRate.parsePlayers([{ user_id: "a", round_wins: 0, won: true }], 3), (e) => /^bad_result/.test(e.message));
+  assert.throws(() => g.BurnRate.parsePlayers([{ user_id: "a", round_wins: 2, won: true }, { user_id: "b", round_wins: 1, won: true }], 3), (e) => /^too_many_winners/.test(e.message));
+});
+
+test("burn-rate run reports keep the player's record and write their board once", () => {
+  const nk = fakeNk();
+  const written = [];
+  nk.leaderboardRecordWrite = (id, owner, username, score, subscore) => {
+    written.push(`${id}/${owner}/${score}/${subscore}`);
+    return { leaderboardId: id, ownerId: owner, score, subscore, rank: 2, updateTime: 0 };
+  };
+  nk.usersGetId = (ids) => ids.map((userId) => ({ userId, username: "Pilot" }));
+  const BURN = ctx({ game: "burn-rate", version: "2026.41.0" });
+  const report = (extra, c = BURN) => g.rpcBurnRateRunReport(c, logger, nk, JSON.stringify({ mode: "endless", pace: "fast", lanes: true, seed: 11, distance: 2100, credits: 64, best_burn: 4, time_ms: 120000, pack: "k3", ...extra }));
+  const res = JSON.parse(report({}));
+  assert.equal(res.board, "distance_fast");
+  assert.equal(res.record.score, 2100);
+  assert.throws(() => report({}), (e) => /^already_reported/.test(e.message));
+  assert.equal(JSON.parse(report({ mode: "course", course: "servers_2", finish_ms: 70000, distance: 1000, time_ms: 71000 })).board, "course_servers_2");
+  assert.equal(JSON.parse(report({ mode: "course", course: "servers_2", distance: 400, time_ms: 30000 })).board, "");
+  assert.deepEqual(written, ["burn-rate.distance_fast/u1/2100/64", "burn-rate.course_servers_2/u1/70000/64"]);
+  const stats = { ...nk.storage.get("burn-rate.stats/stats/u1").value };
+  assert.equal(stats.runs, 3);
+  assert.equal(stats.metres, 3500);
+  assert.equal(stats.best_distance, 2100);
+  assert.equal(stats.courses_finished, 1);
+  assert.throws(() => report({ seed: 12 }, ctx({ game: "race-day", version: "0.1.0" })), (e) => /^wrong_game/.test(e.message));
 });

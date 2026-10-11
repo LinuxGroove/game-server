@@ -273,3 +273,44 @@ test("race-day race reports come from the room's host and credit wins, podiums a
   assert.equal(reason(() => report("host", [{ user_id: "b", position: 4 }], { round: 2, circuit: "proving" })), "ok");
   assert.deepEqual(stats("b"), { races: 2, wins: 0, podiums: 0, poles: 0, fastest_laps: 0, best_finish: 4 });
 });
+
+test("burn-rate party races come from the room's host and credit the winner", () => {
+  const nk = bridgeNk();
+  const written = [];
+  nk.leaderboardRecordWrite = (id, owner, username, score) => {
+    written.push(`${id}/${owner}/${score}`);
+    return {};
+  };
+  nk.usersGetId = (ids) => ids.map((userId) => ({ userId, username: userId }));
+  const BURN = { game: "burn-rate", version: "0.1.0" };
+  const name = "burn-rate:FLY001";
+  for (const u of ["host", "a"]) {
+    create(nk, name, u, BURN);
+    nk.join(name, u);
+  }
+  const matchId = uuidv5dns(name) + ".";
+  const report = (userId, players, extra = {}, vars = BURN) =>
+    g.rpcBurnRatePartyReport(
+      ctx(vars, { userId }),
+      logger,
+      nk,
+      JSON.stringify({ match_id: matchId, race: 1, rounds: 5, players, ...extra }),
+    );
+  const players = [
+    { user_id: "host", rounds: 5, round_wins: 2, won: false },
+    { user_id: "a", rounds: 5, round_wins: 3, won: true },
+  ];
+  assert.equal(reason(() => report("host", players, {}, GRAVEYARD)), "wrong_game");
+  assert.equal(reason(() => report("a", players)), "not_host");
+  assert.equal(reason(() => report("host", [...players, { user_id: "stranger", round_wins: 0 }])), "not_in_room");
+  assert.equal(reason(() => report("host", players, { rounds: 4 })), "rounds must be between 1 and 4");
+  assert.equal(reason(() => report("host", [{ user_id: "a", round_wins: 4, won: true }, { user_id: "host", round_wins: 2 }])), "bad_result");
+  assert.equal(reason(() => report("host", players)), "ok");
+  assert.deepEqual(written, ["burn-rate.wins/a/1"]);
+  const stats = (u) => ({ ...nk.storage.get(`burn-rate.stats/stats/${u}`).value });
+  assert.deepEqual(stats("a"), { races: 1, race_wins: 1, rounds: 5, round_wins: 3 });
+  assert.deepEqual(stats("host"), { races: 1, race_wins: 0, rounds: 5, round_wins: 2 });
+  assert.equal(reason(() => report("host", players)), "already_reported");
+  assert.equal(reason(() => report("host", players, { race: 2 })), "ok");
+  assert.deepEqual(stats("a"), { races: 2, race_wins: 2, rounds: 10, round_wins: 6 });
+});
