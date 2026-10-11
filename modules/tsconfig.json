@@ -39,6 +39,7 @@
     "./src/games/block-party-skyway.ts",
     "./src/games/race-day.ts",
     "./src/games/verdigris-protocol.ts",
+    "./src/games/burn-rate.ts",
     "./src/games/sandbox.ts",
     "./src/games/index.ts",
     "./src/main.ts"

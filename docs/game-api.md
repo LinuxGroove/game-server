@@ -35,6 +35,7 @@ work without a server.
 - [Foam Frenzy](#foam-frenzy)
 - [Race Day](#race-day)
 - [Verdigris Protocol](#verdigris-protocol)
+- [Burn Rate](#burn-rate)
 - [Sandbox test game](#sandbox-test-game)
 
 ## Connecting
@@ -157,8 +158,9 @@ Match on the part before the colon. Reasons:
 | `confirm_required` | 400 | `core.account_delete` needs `{"confirm": "DELETE"}` |
 | `wrong_game`, `not_host`, `not_in_room` | 403/400 | Game module checks (see the game's section) |
 | `too_many_winners` | 400 | A single-winner Foam Frenzy mode reported more than one winner, or a Race Day race more than one winner, pole or fastest lap |
-| `unknown_circuit`, `bad_result` | 400 | A Race Day race report names no known layout, or a result its position can't have |
-| `already_reported` | 409 | That round was already recorded |
+| `unknown_circuit`, `bad_result` | 400 | A Race Day race report names no known layout, or a result its position can't have; a Burn Rate party report with more round wins than rounds, or a course finished after the run ended |
+| `bad_mode`, `bad_pace`, `bad_pack`, `unknown_course`, `too_fast` | 400 | A Burn Rate run report names something the game doesn't have, or a distance or course time faster than any pilot flies |
+| `already_reported` | 409 | That round (or run) was already recorded |
 
 ## core.config
 
@@ -550,6 +552,67 @@ nights played on tonight's station.
 ```
 core.score_submit {"board": "shift_daily", "score": 3253}
 ```
+
+## Burn Rate
+
+Game id `burn-rate`. Bridge rooms named `burn-rate:<CODE>` for 2–8 players
+(party races, Last One Flying), with quick match. No free-text chat.
+
+| Collection | Client writes | Read | Max | Use |
+| --- | --- | --- | --- | --- |
+| `burn-rate.stats` | server | public | | Key `stats`: `runs`, `metres`, `credits`, `seconds`, `best_distance`, `best_burn`, `daily_runs`, `courses_finished` from solo runs; `races`, `race_wins`, `rounds`, `round_wins` from party races |
+
+Leaderboards, all written by the server:
+
+- `burn-rate.distance_calm`, `distance_normal`, `distance_fast` (three lanes)
+  and `distance_classic_calm`, `distance_classic_normal`,
+  `distance_classic_fast` (one lane): best endless distance in metres, highest
+  first, with the run's credits as the subscore.
+- `burn-rate.daily`: today's Daily Flight, best distance, resets at 00:00 UTC.
+- `burn-rate.course_<id>`: best finishing time in milliseconds, lowest first,
+  one per course: `lab_1` to `lab_5`, `servers_1` to `servers_5`, `bay_1` to
+  `bay_5`, `atrium_1` to `atrium_5`, `downtown_1` to `downtown_5` and
+  `halberd_1` to `halberd_5`.
+- `burn-rate.wins`: party races won, all time.
+
+When a solo run ends (endless, the Daily Flight or a Course), the game
+reports it:
+
+```
+burn-rate.run_report {
+  "mode": "endless",          // or "daily", "course"
+  "pace": "normal",           // "calm", "normal", "fast"
+  "lanes": true,              // false for Classic (one lane)
+  "seed": 1234, "distance": 1840, "credits": 55, "best_burn": 3,
+  "time_ms": 131000, "pack": "k2",
+  "course": "lab_1", "finish_ms": 69000   // courses only; finish_ms when finished
+}
+-> {"board": "distance_normal", "record": {"score": 1840, "rank": 12}}
+```
+
+The server refuses a distance faster than any pilot flies (30 m/s, `too_fast`),
+an unknown course (`unknown_course`) or a course time below its length at that
+speed, and the same run twice (`already_reported`); it updates the player's
+stats and writes the run's board. A course run without `finish_ms` counts in
+the stats only (`board` is empty).
+
+When a party race ends (a pilot has won enough rounds), the host reports it:
+
+```
+burn-rate.party_report {
+  "match_id": "<bridge.match_id>",
+  "race": 1,
+  "rounds": 4,
+  "players": [{"user_id": "...", "rounds": 4, "round_wins": 3, "won": true}, ...]
+}
+-> {"recorded": 2}
+```
+
+`players` lists each device's signed-in pilot, not bots or couch pilots.
+`race` counts races in the room from 1. At most one player has `won`, and the
+round wins add up to no more than `rounds` (`too_many_winners`, `bad_result`).
+The server makes the same room checks as for Graveyard Hollow round reports,
+then updates each player's stats and the `wins` board.
 
 ## Sandbox test game
 

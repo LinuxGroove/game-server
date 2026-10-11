@@ -641,6 +641,60 @@ async function main() {
     for (const s of sockets) s.close();
   });
 
+  await step("burn-rate runs and party races go into stats and leaderboards", async () => {
+    const name = "burn-rate:" + code();
+    const players = [];
+    const sockets = [];
+    let matchId = "";
+    for (let i = 0; i < 2; i++) {
+      const p = await login("burn-rate", "0.1.0");
+      const s = await new Socket(p).connect();
+      matchId = (await createNamed(s, name)).match_id;
+      players.push(p);
+      sockets.push(s);
+    }
+    const host = players[0];
+    // A solo run: the best distance on its pace's board stays.
+    const run = { mode: "endless", pace: "normal", lanes: true, seed: 42, distance: 1840, credits: 55, best_burn: 3, time_ms: 131000, pack: "k2" };
+    assert.equal((await rpc(host, "burn-rate.run_report", run)).board, "distance_normal");
+    await expectError(rpc(host, "burn-rate.run_report", run), 409, "already_reported");
+    await rpc(host, "burn-rate.run_report", { ...run, seed: 43, distance: 900, time_ms: 70000 });
+    await expectError(rpc(host, "burn-rate.run_report", { ...run, seed: 44, distance: 9000 }), 400, "too_fast");
+    const best = await http("GET", `/v2/leaderboard/burn-rate.distance_normal?owner_ids=${host.userId}`, { token: host.token });
+    assert.equal(Number(best.owner_records[0].score), 1840);
+    // A course: the lowest finishing time stays.
+    const course = { ...run, mode: "course", course: "lab_1", seed: 1, distance: 700, time_ms: 70000, finish_ms: 69000 };
+    assert.equal((await rpc(host, "burn-rate.run_report", course)).board, "course_lab_1");
+    await rpc(host, "burn-rate.run_report", { ...course, seed: 2, time_ms: 80000, finish_ms: 79000 });
+    const times = await http("GET", `/v2/leaderboard/burn-rate.course_lab_1?owner_ids=${host.userId}`, { token: host.token });
+    assert.equal(Number(times.owner_records[0].score), 69000);
+    // A party race, from the room's host.
+    const race = {
+      match_id: matchId,
+      race: 1,
+      rounds: 4,
+      players: [
+        { user_id: players[1].userId, rounds: 4, round_wins: 3, won: true },
+        { user_id: host.userId, rounds: 4, round_wins: 1, won: false },
+      ],
+    };
+    await expectError(rpc(players[1], "burn-rate.party_report", race), 403, "not_host");
+    assert.equal((await rpc(host, "burn-rate.party_report", race)).recorded, 2);
+    await expectError(rpc(host, "burn-rate.party_report", race), 409, "already_reported");
+    const stats = await http("POST", "/v2/storage", {
+      token: host.token,
+      body: { object_ids: [{ collection: "burn-rate.stats", key: "stats", user_id: host.userId }] },
+    });
+    const v = JSON.parse(stats.objects[0].value);
+    assert.equal(v.runs, 4);
+    assert.equal(v.best_distance, 1840);
+    assert.equal(v.races, 1);
+    assert.equal(v.round_wins, 1);
+    const wins = await http("GET", `/v2/leaderboard/burn-rate.wins?owner_ids=${players[1].userId}`, { token: host.token });
+    assert.equal(Number(wins.owner_records[0].score), 1);
+    for (const s of sockets) s.close();
+  });
+
   // Account lifecycle.
   await step("players can export and delete their account", async () => {
     const exported = await rpc(c, "core.account_export");
