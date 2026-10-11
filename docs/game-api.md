@@ -34,6 +34,7 @@ work without a server.
 - [Graveyard Hollow](#graveyard-hollow)
 - [Foam Frenzy](#foam-frenzy)
 - [Race Day](#race-day)
+- [Verdigris Protocol](#verdigris-protocol)
 - [Sandbox test game](#sandbox-test-game)
 
 ## Connecting
@@ -534,6 +535,21 @@ the report is refused with `bad_result`; at most one player has each of
 server makes the same checks as for Graveyard Hollow round reports, then
 updates each player's stats and the `wins`, `wins_weekly`, `podiums` and
 `poles` boards.
+
+## Verdigris Protocol
+
+Game id `verdigris-protocol`. One player, no rooms or chat.
+
+Shift mode's boards, written by the client with `core.score_submit`, the
+night's score from 1 to 20000, highest first, keeping each player's best:
+`verdigris-protocol.shift_daily`, tonight's station (every player gets the same
+station, seeded from the UTC date), which resets at 00:00 UTC, and
+`verdigris-protocol.shift_best`, best nights of all time. The game only submits
+nights played on tonight's station.
+
+```
+core.score_submit {"board": "shift_daily", "score": 3253}
+```
 
 ## Sandbox test game
 
