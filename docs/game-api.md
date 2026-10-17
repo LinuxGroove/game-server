@@ -36,6 +36,7 @@ work without a server.
 - [Race Day](#race-day)
 - [Verdigris Protocol](#verdigris-protocol)
 - [Burn Rate](#burn-rate)
+- [All City](#all-city)
 - [Sandbox test game](#sandbox-test-game)
 
 ## Connecting
@@ -160,6 +161,7 @@ Match on the part before the colon. Reasons:
 | `too_many_winners` | 400 | A single-winner Foam Frenzy mode reported more than one winner, or a Race Day race more than one winner, pole or fastest lap |
 | `unknown_circuit`, `bad_result` | 400 | A Race Day race report names no known layout, or a result its position can't have; a Burn Rate party report with more round wins than rounds, or a course finished after the run ended |
 | `bad_mode`, `bad_pace`, `bad_pack`, `unknown_course`, `too_fast` | 400 | A Burn Rate run report names something the game doesn't have, or a distance or course time faster than any pilot flies |
+| `bad_town`, `bad_wall`, `bad_rank`, `bad_kit`, `too_quick` | 400 | An All City paint names no town, wall or rank the game can have, its kit isn't a JSON object, or it took less time than its rank takes |
 | `already_reported` | 409 | That round (or run) was already recorded |
 
 ## core.config
@@ -613,6 +615,82 @@ burn-rate.party_report {
 round wins add up to no more than `rounds` (`too_many_winners`, `bad_result`).
 The server makes the same room checks as for Graveyard Hollow round reports,
 then updates each player's stats and the `wins` board.
+
+## All City
+
+Game id `all-city`. No rooms, crews, boards or chat yet, just the walls.
+
+| Collection | Client writes | Read | Max | Use |
+| --- | --- | --- | --- | --- |
+| `all-city.progress` | yes | owner | 32 KB | The writer's rep, synced between devices |
+| `all-city.walls` | server | server only | | Every painted wall of a quarter, one object per quarter, read with `all-city.walls` |
+
+Walls are the wall faces of a town's buildings, named by the Cartographer's own
+wall ids (`w` and 6 to 16 lower-case hex digits; never OpenStreetMap ids), in
+the town's quarters (0 to 9999). A town is up to 48 lower-case letters, digits
+and `-`. Paint stays up for everyone until a rival goes over it, it fades, or
+the city's cleaners, the Buff, clean it at dawn.
+
+To paint a wall:
+
+```
+all-city.paint {
+  "town": "monaco", "quarter": 12, "wall": "w1a2b3c",
+  "rank": "tag",                 // or "throwup", "piece", "burner"
+  "kit": {"style": "handstyle"}, // the paint as the game draws it: a JSON object, 2 KB at most
+  "grade": 70, "eyes": 40,       // 0 to 100: the execution grade, and the wall's eyes
+  "heaven": false,               // a heaven spot, out of the Buff's reach
+  "seconds": 3.5,                // time spent painting
+  "utc_offset_min": 60,          // the town's offset from UTC, in minutes
+  "cap": false                   // go over better paint with a lower rank anyway
+}
+-> {"ok": true, "wall": {"writer": "<user id>", "name": "Ana", "rank": "tag", "kit": {"style": "handstyle"},
+    "grade": 70, "eyes": 40, "heaven": false, "at": 1792274400, "capped": false}}
+-> {"ok": false, "reason": "rank"}
+```
+
+`name` is the writer's display name (their username when they have none) and
+`at` the time it was painted. Paint stands for its rank's life: a tag 3 days, a
+throw-up 10, a piece 30 and a burner 60; after that it has faded and the wall
+is bare. Against what's on the wall now, a bare wall takes anything, writers
+can always go over their own work, a higher rank goes over a lower one, and an
+equal rank goes over paint faded past half its life. Anything else is refused
+with `rank`, except that a lower rank with `cap` goes on anyway, marked
+`capped`. A paint that took less than its rank takes (a tag 2 seconds, a
+throw-up 15, a piece 90, a burner 240) is refused with `too_quick`. The other
+refusals are `rate` (a writer paints at most 40 times an hour, refused paints
+included), `full` (a quarter holds 1000 painted walls) and `busy` (others kept
+painting the same quarter; try again). The first paint in a quarter sets its
+`utc_offset_min`, clamped to -720 to 840, and later paints' offsets are
+ignored.
+
+To read a quarter, when arriving in it and every so often after:
+
+```
+all-city.walls {"town": "monaco", "quarter": 12, "since": 1792274400}
+-> {"walls": {"w1a2b3c": {...}, ...}, "last_dawn": 1792299600, "buffed": ["w1a2b3c"]}
+```
+
+`walls` is every wall with paint standing on it, as `all-city.paint` returns
+them. `last_dawn` is the latest dawn in the town, or 0 when nobody has painted
+in the quarter yet. `buffed` lists the walls the Buff cleaned after `since`
+(unix seconds, optional; the last 200 cleanings are kept), so the game can
+show what happened overnight. A player can read 120 quarters a minute, then
+gets `rate_limited`.
+
+The Buff comes at 06:00 every day in the town's time (UTC plus the quarter's
+offset, with no daylight saving). Each dawn it has 8 to spend on the walls
+painted before it, cleaning a tag for 1, a throw-up for 2, a piece for 4 and a
+burner for 8: lowest rank first, then the walls with the most eyes, then the
+oldest, then by wall id, until the next costs more than it has left. It never
+reaches heaven spots. The server brings the Buff up to date before every paint
+and every read, catching up on the last 7 dawns at most, so walls change
+overnight with nobody online. The rules are written out exactly in
+[all-city.ts](../modules/src/games/all-city.ts), and the game's own copy of
+them must match.
+
+Paint stays up after its writer deletes their account, until it fades, is
+gone over or is buffed.
 
 ## Sandbox test game
 

@@ -6,9 +6,10 @@
 // running as a single node.
 
 namespace RateLimit {
-  export function check(nk: nkruntime.Nakama, userId: string, bucket: string, limit: number, windowSec: number): void {
+  /** Count one call, or return false (counting nothing) when the player is at the limit. */
+  export function allow(nk: nkruntime.Nakama, userId: string, bucket: string, limit: number, windowSec: number): boolean {
     if (limit <= 0) {
-      return;
+      return true;
     }
     const window = Math.floor(Util.nowSeconds() / windowSec);
     const key = "rl:" + bucket + ":" + userId + ":" + window;
@@ -18,8 +19,16 @@ namespace RateLimit {
       count = current;
     }
     if (count >= limit) {
-      Util.fail(Code.RESOURCE_EXHAUSTED, "rate_limited: too many " + bucket + " requests, try again later");
+      return false;
     }
     nk.localcachePut(key, count + 1, windowSec + 1);
+    return true;
+  }
+
+  /** Count one call, or refuse it with rate_limited when the player is at the limit. */
+  export function check(nk: nkruntime.Nakama, userId: string, bucket: string, limit: number, windowSec: number): void {
+    if (!allow(nk, userId, bucket, limit, windowSec)) {
+      Util.fail(Code.RESOURCE_EXHAUSTED, "rate_limited: too many " + bucket + " requests, try again later");
+    }
   }
 }

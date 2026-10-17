@@ -695,6 +695,29 @@ async function main() {
     for (const s of sockets) s.close();
   });
 
+  await step("all-city walls take paint by the rank rule and are read through the server", async () => {
+    const town = "smoke-" + code().toLowerCase();
+    const one = await login("all-city", "0.1.0");
+    const two = await login("all-city", "0.1.0");
+    const tag = { town, quarter: 7, wall: "w5a0c0de", rank: "tag", kit: { style: "handstyle" }, grade: 60, eyes: 30, heaven: false, seconds: 3, utc_offset_min: 60, cap: false };
+    assert.deepEqual(await rpc(two, "all-city.walls", { town, quarter: 7 }), { walls: {}, last_dawn: 0, buffed: [] });
+    const painted = await rpc(one, "all-city.paint", tag);
+    assert.equal(painted.ok, true);
+    assert.equal(painted.wall.writer, one.userId);
+    assert.deepEqual(await rpc(two, "all-city.paint", tag), { ok: false, reason: "rank" });
+    assert.equal((await rpc(two, "all-city.paint", { ...tag, rank: "throwup", seconds: 20 })).ok, true);
+    await expectError(rpc(two, "all-city.paint", { ...tag, rank: "piece", seconds: 30 }), 400, "too_quick");
+    const seen = await rpc(one, "all-city.walls", { town, quarter: 7, since: 0 });
+    assert.equal(seen.walls.w5a0c0de.rank, "throwup");
+    assert.equal(seen.walls.w5a0c0de.writer, two.userId);
+    assert.ok(seen.last_dawn > 0);
+    assert.deepEqual(seen.buffed, []);
+    // The walls are the server's: players can't write them directly.
+    const forged = { objects: [{ collection: "all-city.walls", key: `${town}:7`, value: "{}", permission_read: 1, permission_write: 1 }] };
+    await expectError(http("PUT", "/v2/storage", { token: one.token, body: forged }), 403, "read_only");
+    await http("PUT", "/v2/storage", { token: one.token, body: { objects: [{ ...forged.objects[0], collection: "all-city.progress", key: "rep" }] } });
+  });
+
   // Account lifecycle.
   await step("players can export and delete their account", async () => {
     const exported = await rpc(c, "core.account_export");
