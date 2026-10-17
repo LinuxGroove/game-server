@@ -58,6 +58,17 @@ if ! [[ "$days" =~ ^[0-9]+$ ]] || [ "$days" -lt 1 ]; then
   fail "backup.keep-days must be a whole number of days"
 fi
 
+url="$(cfg switchboard.url)"
+if [ -n "$url" ] && ! [[ "$url" =~ ^https?://[^[:space:]]+$ ]]; then
+  fail "switchboard.url must be an http(s) URL like http://127.0.0.1:8000/v1"
+fi
+for k in switchboard.user-budget switchboard.daily-cap; do
+  v="$(cfg "$k")"
+  if [ -n "$v" ] && ! [[ "$v" =~ ^[0-9]+$ ]]; then
+    fail "$k must be a whole number of tokens"
+  fi
+done
+
 bad_games="$(snapctl get -d games 2>/dev/null | jq -r '
   (.games // {}) | to_entries[] | .key as $g |
   if ($g | test("^[a-z][a-z0-9-]*$") | not) then "game id \($g)"
@@ -107,7 +118,7 @@ restart_if_changed() {
   sum="$(
     {
       for key in "$@"; do snapctl get -d "$key" 2>/dev/null || true; done
-      cat "$SECRETS/database-url" "$SECRETS/s3-secret-access-key" 2>/dev/null || true
+      cat "$SECRETS/database-url" "$SECRETS/s3-secret-access-key" "$SECRETS/switchboard-key" 2>/dev/null || true
     } | sha256sum | cut -d' ' -f1
   )"
   if [ -f "$applied/$name" ] && [ "$(cat "$applied/$name")" != "$sum" ] && is_active "$name"; then
@@ -116,5 +127,5 @@ restart_if_changed() {
   echo "$sum" >"$applied/$name"
 }
 restart_if_changed postgres role postgres
-restart_if_changed nakama role server-key domain api console log-level metrics games blobs shares node-name postgres.port
+restart_if_changed nakama role server-key domain api console log-level metrics games blobs shares switchboard node-name postgres.port
 restart_if_changed proxy role domain proxy api

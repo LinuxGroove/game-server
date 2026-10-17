@@ -45,6 +45,11 @@ services:
           --console.signing_key "$${CONSOLE_SIGNING_KEY}" \
           --runtime.http_key "$${RUNTIME_HTTP_KEY}" \
           --runtime.env "GAME_SANDBOX_ENABLED=$${GAME_SANDBOX_ENABLED}" \
+          --runtime.env "SWITCHBOARD_URL=$${SWITCHBOARD_URL}" \
+          --runtime.env "SWITCHBOARD_KEY=$${SWITCHBOARD_KEY}" \
+          --runtime.env "SWITCHBOARD_MODEL=$${SWITCHBOARD_MODEL}" \
+          --runtime.env "SWITCHBOARD_USER_BUDGET=$${SWITCHBOARD_USER_BUDGET}" \
+          --runtime.env "SWITCHBOARD_DAILY_CAP=$${SWITCHBOARD_DAILY_CAP}" \
           --logger.format "$${LOG_FORMAT}"
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-localdev}
@@ -55,6 +60,12 @@ services:
       CONSOLE_SIGNING_KEY: ${CONSOLE_SIGNING_KEY:-localdev-console-key}
       RUNTIME_HTTP_KEY: ${RUNTIME_HTTP_KEY:-localdev-http-key}
       GAME_SANDBOX_ENABLED: ${GAME_SANDBOX_ENABLED:-true}
+      # Silver Tongue's Switchboard: off unless SWITCHBOARD_URL is set.
+      SWITCHBOARD_URL: ${SWITCHBOARD_URL:-}
+      SWITCHBOARD_KEY: ${SWITCHBOARD_KEY:-}
+      SWITCHBOARD_MODEL: ${SWITCHBOARD_MODEL:-}
+      SWITCHBOARD_USER_BUDGET: ${SWITCHBOARD_USER_BUDGET:-}
+      SWITCHBOARD_DAILY_CAP: ${SWITCHBOARD_DAILY_CAP:-}
       LOG_FORMAT: ${LOG_FORMAT:-json}
     volumes:
       - ../../config/nakama.yml:/nakama/config/nakama.yml:ro

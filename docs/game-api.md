@@ -36,6 +36,7 @@ work without a server.
 - [Race Day](#race-day)
 - [Verdigris Protocol](#verdigris-protocol)
 - [Burn Rate](#burn-rate)
+- [Silver Tongue](#silver-tongue)
 - [Sandbox test game](#sandbox-test-game)
 
 ## Connecting
@@ -160,6 +161,11 @@ Match on the part before the colon. Reasons:
 | `too_many_winners` | 400 | A single-winner Foam Frenzy mode reported more than one winner, or a Race Day race more than one winner, pole or fastest lap |
 | `unknown_circuit`, `bad_result` | 400 | A Race Day race report names no known layout, or a result its position can't have; a Burn Rate party report with more round wins than rounds, or a course finished after the run ended |
 | `bad_mode`, `bad_pace`, `bad_pack`, `unknown_course`, `too_fast` | 400 | A Burn Rate run report names something the game doesn't have, or a distance or course time faster than any pilot flies |
+| `unknown_job`, `bad_venue`, `bad_take`, `bad_memory` | 400 | A Silver Tongue job report or contract score names no such job, the wrong venue, a take the job can't pay (or not a multiple of 500 on the contract board), or memories of the wrong shape |
+| `bad_contract` | 400 | A Silver Tongue contract score carries a number that isn't this week's or last week's |
+| `cannot_buy` | 400 | `silver-tongue.buy_face` needs a burned face and $6000 |
+| `switchboard_off`, `switchboard_error` | 503 | Silver Tongue's Switchboard isn't set up on this server, or its model didn't answer |
+| `switchboard_budget` | 429 | The account's or the server's Switchboard tokens for the UTC day are used up |
 | `already_reported` | 409 | That round (or run) was already recorded |
 
 ## core.config
@@ -613,6 +619,108 @@ burn-rate.party_report {
 round wins add up to no more than `rounds` (`too_many_winners`, `bad_result`).
 The server makes the same room checks as for Graveyard Hollow round reports,
 then updates each player's stats and the `wins` board.
+
+## Silver Tongue
+
+Game id `silver-tongue`. Bridge rooms named `silver-tongue:<CODE>` for a crew
+of 1–4, with no quick match (a con job needs a crew who agreed to it). No
+free-text chat. The game runs its own models on the player's machine; the
+server keeps the crew's record, the Circuit's weekly contract and, if the
+operator sets one up, the Switchboard.
+
+| Collection | Client writes | Read | Max | Use |
+| --- | --- | --- | --- | --- |
+| `silver-tongue.stats` | server | public | | Key `stats`: counters `jobs` (pulled off), `tries`, `clean`, `quiet`, `silver`, `take` (dollars), `held` (times a face was held), `circuit_nights` |
+| `silver-tongue.memory` | server | owner | 16 KB | Key `crew`: `{burned, faces, take, memories: {venue: {character: [up to 4 lines]}}, done: {job: {clean, quiet, silver, take}}}` |
+| `silver-tongue.switchboard` | server | owner | | Switchboard token counts: key `day` per account, and one `total` owned by the system |
+
+Share kind `report` (8 KB, 30 per player): a job's report card, by code with
+the usual `core.share_*` calls.
+
+Leaderboards:
+
+- `silver-tongue.contract_weekly`: the best take on this week's contract, highest
+  first. Clients submit it with `core.score_submit`; the score is a take in
+  dollars from 500 to 60000 and a multiple of 500, and `metadata` is
+  `{"seed": 202643, "job": "marlin_safe"}`. The contract's number is the year
+  times 100 plus the week, where weeks run Sunday to Saturday (UTC) and are
+  numbered like ISO weeks (a Sunday starts the ISO week of the Monday after
+  it), so Sunday 2026-10-18 begins `202643` and Saturday 2026-10-17 is still
+  `202642`. The board itself resets on Monday 00:00 UTC, a day after the
+  contract changes, so the server accepts the current number and the previous
+  week's (`bad_contract` otherwise). The job must be one of the 13 jobs
+  (`unknown_job`) and the score a multiple of 500 (`bad_take`).
+- Written by the server: `jobs` (jobs pulled off), `jobs_weekly` (the same,
+  resets Monday 00:00 UTC), `clean_jobs` (jobs with nobody alerted) and `take`
+  (total take in dollars), all running totals.
+
+The 13 jobs, with their take: `meridian_gala` 2000, `meridian_list` 4000,
+`meridian_case` 8000, `marlin_aboard` 3000, `marlin_safe` 6000,
+`marlin_auction` 12000, `tideline_count` 9000, `tideline_favor` 5000,
+`tideline_vault` 15000, `vantage_lift` 4000, `vantage_board` 8000,
+`vantage_research` 20000, `mae_party` 25000.
+
+When a job ends in a room, its host reports it:
+
+```
+silver-tongue.job_report {
+  "match_id": "<bridge.match_id>", "round": 1,
+  "job": "marlin_safe", "venue": "marlin",
+  "circuit": 0,                     // a Circuit night's number, 0 for the season's own jobs
+  "win": true, "clean": true, "quiet": false, "silver": true,
+  "take": 6000,                     // 0 unless won
+  "players": [{"user_id": "...", "held": false,
+               "memories": {"purser": ["asked about the safe"]}}, ...]
+}
+-> {"ok": true, "round": 1}
+```
+
+The server makes the same room checks as for Graveyard Hollow round reports
+(only the host, every player in the room, each round once: `already_reported`).
+The take can't be more than the job's own, or on a Circuit night 2.25 times
+that to the nearest 500 (`bad_take`); a job that failed has no take or marks
+(`bad_result`). `players` lists each device's signed-in crew member, not bots.
+For each, the server adds to `stats`, and in `memory` it adds the take, sets
+`burned` when `held` (nothing here clears it), keeps the newest 4 lines per
+character (200 characters each) and, for a won season job, keeps the best
+`clean`, `quiet`, `silver` and `take` in `done`. A win also adds to the
+`jobs`, `jobs_weekly` and `take` boards, and to `clean_jobs` when clean.
+
+```
+silver-tongue.memory {}   -> {"burned": false, "faces": 0, "take": 0, "memories": {}, "done": {}}
+silver-tongue.buy_face {} -> the new memory object
+```
+
+`memory` is the caller's own object with every field present. `buy_face` costs
+$6000 of `take` for a burned crew member: `burned` clears and `faces` goes up
+by one; anything else is `cannot_buy`. (A solo season is kept on the device;
+these keep the online crew's faces honest.)
+
+### The Switchboard
+
+For hosts without a GPU, the server can lend a model. It is off (`switchboard_off`)
+unless the operator sets `switchboard.url` (see
+[operations.md](operations.md#settings)); the game offers it only if the
+player turns it on, and sends only the host's prompts: **the host's character
+sheet and what the crew said and the cast heard go to the server and on to its
+model.** The server doesn't keep them.
+
+```
+silver-tongue.switchboard {
+  "messages": [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}],
+  "max_tokens": 200,        // 1 to 400, default 256
+  "json_schema": {...}      // optional: the reply must match this JSON schema
+}
+-> {"text": "...", "usage": {"prompt_tokens": 812, "completion_tokens": 64}, "left": 118900}
+```
+
+Messages are at most 60 and 24000 characters between them. Each call is
+charged an estimate up front (the prompt at three characters a token plus
+`max_tokens`) against the account's tokens for the UTC day (120000 by default)
+and the server's (5000000), then adjusted to what the model reports; over
+either is `switchboard_budget`. `left` is the account's tokens left today. An
+account may make 30 calls a minute (`rate_limited`). The upstream is called
+with a 20 second timeout, and a failure (`switchboard_error`) is not charged.
 
 ## Sandbox test game
 

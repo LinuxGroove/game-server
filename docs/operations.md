@@ -74,6 +74,10 @@ change affects. `snap get linuxgroove-game-server` shows the current values.
 | `blobs.virtual-host` | `false` | Use `bucket.host` style URLs |
 | `blobs.internal-endpoint` | | Endpoint the server itself uses, if different from the public one |
 | `shares.hide-threshold` | `5` | Player reports that hide a share until an admin clears it |
+| `switchboard.url` | | OpenAI-compatible base URL for Silver Tongue's [Switchboard](game-api.md#silver-tongue) (the server calls `<url>/chat/completions`); empty keeps it off |
+| `switchboard.model` | | Model name sent upstream |
+| `switchboard.user-budget` | `120000` | Tokens one account may use per UTC day |
+| `switchboard.daily-cap` | `5000000` | Tokens the whole server lends per UTC day |
 
 Game ids in `games.*` use dashes as in the game id (`games.graveyard-hollow.motd`).
 
@@ -82,11 +86,12 @@ Game ids in `games.*` use dashes as in the game id (`games.graveyard-hollow.motd
 Snap settings are readable by every local user, so passwords live in
 `/var/snap/linuxgroove-game-server/current/secrets` (root only) instead. The
 snap generates its own (session keys, console password, database passwords) on
-first start. Two are yours to set, from standard input:
+first start. A few are yours to set, from standard input:
 
 ```sh
 echo -n 'nakama:<password>@db.internal:5432/nakama?sslmode=require' | sudo linuxgroove-game-server.secret set database-url
 echo -n '<secret key>' | sudo linuxgroove-game-server.secret set s3-secret-access-key
+echo -n '<api key>' | sudo linuxgroove-game-server.secret set switchboard-key   # only if the Switchboard's upstream needs one
 sudo snap restart linuxgroove-game-server
 ```
 
@@ -305,6 +310,7 @@ metrics, all prefixed `nakama_custom_`:
 | `room_seconds`, `room_players` | game | Summed over closed relay rooms (divide by `rooms_closed` for averages) |
 | `matchmaker_matches` | game | Matchmaker results |
 | `rounds`, `round_players` | game, outcome | Rounds reported by game modules |
+| `switchboard_calls` | game, outcome | Silver Tongue Switchboard calls: `ok`, `error` (upstream failed) or `budget` (refused) |
 | `scores_submitted` | game, board | `core.score_submit` calls |
 | `blob_uploads`, `blob_downloads`, `shares_created` | game, kind | Upload and download links handed out, shares made |
 | `shares_opened`, `share_reports`, `account_deletions` | game | |

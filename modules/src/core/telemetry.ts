@@ -37,6 +37,8 @@ namespace Telemetry {
     ROUNDS: "rounds",
     // game
     ROUND_PLAYERS: "round_players",
+    // game, outcome (ok|error|budget): Silver Tongue's Switchboard calls
+    SWITCHBOARD_CALLS: "switchboard_calls",
     // game, board
     SCORES_SUBMITTED: "scores_submitted",
     // game, kind
