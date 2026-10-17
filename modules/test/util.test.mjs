@@ -37,6 +37,7 @@ test("the shipped game registry is valid", () => {
   assert.ok(ids.includes("foam-frenzy"), ids.join(", "));
   assert.ok(ids.includes("race-day"), ids.join(", "));
   assert.ok(ids.includes("burn-rate"), ids.join(", "));
+  assert.ok(ids.includes("all-city"), ids.join(", "));
   assert.ok(ids.includes("sandbox"), ids.join(", "));
 });
 
@@ -83,6 +84,9 @@ test("rate limits refuse calls past the limit", () => {
   for (let i = 0; i < 3; i++) g.RateLimit.check(nk, "u1", "test", 3, 60);
   assert.throws(() => g.RateLimit.check(nk, "u1", "test", 3, 60), (e) => e.code === 8);
   g.RateLimit.check(nk, "u2", "test", 3, 60);
+  // allow() counts the same way, answering instead of refusing.
+  assert.equal(g.RateLimit.allow(nk, "u3", "test", 1, 60), true);
+  assert.equal(g.RateLimit.allow(nk, "u3", "test", 1, 60), false);
 });
 
 test("matchmaker tickets are pinned to the session's game", () => {
@@ -307,4 +311,269 @@ test("burn-rate run reports keep the player's record and write their board once"
   assert.equal(stats.best_distance, 2100);
   assert.equal(stats.courses_finished, 1);
   assert.throws(() => report({ seed: 12 }, ctx({ game: "race-day", version: "0.1.0" })), (e) => /^wrong_game/.test(e.message));
+});
+
+const DAY = 86400;
+/** Saturday 17 October 2026, 12:00 UTC. */
+const T = Date.UTC(2026, 9, 17, 12) / 1000;
+const paintOn = (rank, at, extra = {}) => ({ writer: "a", name: "Ana", rank, kit: {}, grade: 50, eyes: 50, heaven: false, at, capped: false, ...extra });
+const utc = (times) => Array.from(times, (t) => new Date(t * 1000).toISOString().slice(0, 16));
+
+/** Runs fn with the server's clock stopped at `clock.now`, which fn can move. */
+function withClock(start, fn) {
+  const clock = { now: start };
+  const real = g.Util.nowSeconds;
+  g.Util.nowSeconds = () => clock.now;
+  try {
+    fn(clock);
+  } finally {
+    g.Util.nowSeconds = real;
+  }
+}
+
+test("all-city keeps its writers' progress and the server's walls, with no boards or rooms yet", () => {
+  const def = g.GAME_ALL_CITY;
+  assert.deepEqual(Array.from(def.collections, (c) => ({ ...c })), [
+    { name: "progress", clientWrite: true, maxBytes: 32768, read: "owner" },
+    { name: "walls", clientWrite: false, maxBytes: 0, read: "owner" },
+  ]);
+  assert.equal(def.leaderboards.length, 0);
+  assert.equal(def.rooms, null);
+  assert.equal(def.chat, false);
+  assert.equal(g.Guards.clientCollection(def, "all-city.progress").name, "progress");
+  assert.throws(() => g.Guards.clientCollection(def, "all-city.walls"), (e) => /^read_only/.test(e.message));
+});
+
+test("all-city paint fades after its life, and is fair game for its own rank past half", () => {
+  assert.deepEqual({ ...g.AllCity.LIFE }, { tag: 3 * DAY, throwup: 10 * DAY, piece: 30 * DAY, burner: 60 * DAY });
+  const tag = paintOn("tag", T);
+  assert.equal(g.AllCity.faded(tag, T + 3 * DAY), false, "a tag stands for exactly three days");
+  assert.equal(g.AllCity.faded(tag, T + 3 * DAY + 1), true);
+  assert.equal(g.AllCity.pastHalf(tag, T + 1.5 * DAY), false);
+  assert.equal(g.AllCity.pastHalf(tag, T + 1.5 * DAY + 1), true);
+  assert.equal(g.AllCity.faded(paintOn("burner", T), T + 60 * DAY), false);
+  assert.equal(g.AllCity.faded(paintOn("burner", T), T + 60 * DAY + 1), true);
+});
+
+test("all-city goes over lower ranks, equal ranks past half, and lower ranks only by capping", () => {
+  const can = (current, rank, { writer = "b", cap = false, now = T + 60 } = {}) => ({ ...g.AllCity.canPaint(current, writer, rank, cap, now) });
+  const OK = { ok: true, capped: false, reason: "" };
+  const NO = { ok: false, capped: false, reason: "rank" };
+  const piece = paintOn("piece", T);
+  assert.deepEqual(can(null, "tag"), OK, "a bare wall takes anything");
+  assert.deepEqual(can(piece, "burner"), OK);
+  assert.deepEqual(can(piece, "piece"), NO, "a fresh piece holds against another piece");
+  assert.deepEqual(can(piece, "piece", { now: T + 15 * DAY }), NO);
+  assert.deepEqual(can(piece, "piece", { now: T + 15 * DAY + 1 }), OK, "and doesn't once it's faded past half");
+  assert.deepEqual(can(piece, "throwup"), NO);
+  assert.deepEqual(can(piece, "tag", { cap: true }), { ok: true, capped: true, reason: "" });
+  assert.deepEqual(can(piece, "piece", { cap: true }), NO, "capping is for lower ranks");
+  assert.deepEqual(can(piece, "burner", { cap: true }), OK, "going over with a higher rank isn't capping");
+  assert.deepEqual(can(piece, "tag", { writer: "a" }), OK, "writers go over their own work");
+  assert.deepEqual(can(piece, "tag", { writer: "a", cap: true }), OK, "without capping themselves");
+  assert.deepEqual(can(piece, "tag", { now: T + 30 * DAY + 1 }), OK, "faded paint leaves a bare wall");
+});
+
+test("all-city dawn is 06:00 in the town's time, whatever its offset, and the Buff catches up on a week at most", () => {
+  const from = Date.UTC(2026, 9, 15, 12) / 1000;
+  assert.deepEqual(utc(g.AllCity.dawns(from, T, 0)), ["2026-10-16T06:00", "2026-10-17T06:00"]);
+  assert.deepEqual(utc(g.AllCity.dawns(from, T, 60)), ["2026-10-16T05:00", "2026-10-17T05:00"]);
+  assert.deepEqual(utc(g.AllCity.dawns(from, T, 330)), ["2026-10-16T00:30", "2026-10-17T00:30"]);
+  assert.deepEqual(utc(g.AllCity.dawns(from, T, -300)), ["2026-10-16T11:00", "2026-10-17T11:00"]);
+  assert.deepEqual(utc(g.AllCity.dawns(from, T, 840)), ["2026-10-15T16:00", "2026-10-16T16:00"], "UTC+14 sees dawn the day before UTC");
+  assert.deepEqual(utc(g.AllCity.dawns(from, T, -720)), ["2026-10-15T18:00", "2026-10-16T18:00"]);
+  const dawn = Date.UTC(2026, 9, 17, 6) / 1000;
+  assert.deepEqual(Array.from(g.AllCity.dawns(dawn - 1, dawn, 0)), [dawn], "a dawn right now counts");
+  assert.deepEqual(Array.from(g.AllCity.dawns(dawn, dawn + DAY - 1, 0)), [], "and isn't counted again");
+  assert.deepEqual(Array.from(g.AllCity.dawns(T, from, 0)), []);
+  const month = g.AllCity.dawns(T - 30 * DAY, T, 0);
+  assert.equal(month.length, 7);
+  assert.deepEqual(utc([month[0], month[6]]), ["2026-10-11T06:00", "2026-10-17T06:00"]);
+  assert.equal(g.AllCity.dawns(0, T, 0).length, 7);
+  assert.equal(g.AllCity.lastDawn(dawn, 0), dawn);
+  assert.equal(g.AllCity.lastDawn(dawn - 1, 0), dawn - DAY);
+  assert.deepEqual(utc([g.AllCity.lastDawn(T, -300), g.AllCity.lastDawn(T, 840)]), ["2026-10-17T11:00", "2026-10-16T16:00"]);
+});
+
+test("the Buff cleans the cheapest walls first, then the most seen, within its budget, and never heaven spots", () => {
+  const dawn = Date.UTC(2026, 9, 17, 6) / 1000;
+  const before = dawn - DAY;
+  const cleaned = (walls, from = dawn - 1, to = dawn, offset = 0) => Array.from(g.AllCity.buff(walls, from, to, offset), (b) => b.wall);
+  const quarter = {
+    w000001: paintOn("tag", before, { eyes: 10 }),
+    w000002: paintOn("tag", before, { eyes: 90 }),
+    w000003: paintOn("burner", before, { eyes: 100 }),
+    w000004: paintOn("piece", before, { eyes: 80 }),
+    w000005: paintOn("throwup", before, { eyes: 20 }),
+    w000006: paintOn("tag", before, { eyes: 100, heaven: true }),
+  };
+  // 1 + 1 + 2 + 4 spends the budget of 8, so the burner waits.
+  assert.deepEqual(cleaned(quarter), ["w000002", "w000001", "w000005", "w000004"]);
+  assert.equal(Object.keys(quarter).length, 6, "working it out changes nothing");
+  // It stops at the first wall that costs more than what's left.
+  const throwups = { w00000a: paintOn("throwup", before), w00000b: paintOn("throwup", before), w00000c: paintOn("throwup", before), w00000d: paintOn("piece", before) };
+  assert.deepEqual(cleaned(throwups), ["w00000a", "w00000b", "w00000c"]);
+  const big = { w0000b1: paintOn("burner", before, { eyes: 100 }), w0000b2: paintOn("tag", before, { eyes: 0 }) };
+  assert.deepEqual(cleaned(big), ["w0000b2"]);
+  assert.deepEqual(Array.from(g.AllCity.buff(big, dawn - 1, dawn + DAY, 0), (b) => ({ ...b })), [
+    { wall: "w0000b2", at: dawn },
+    { wall: "w0000b1", at: dawn + DAY },
+  ]);
+  // Equal cost and eyes: oldest first, then by id.
+  const ties = { w0000c2: paintOn("tag", before - 60), w0000c1: paintOn("tag", before), w0000c3: paintOn("tag", before - 60) };
+  assert.deepEqual(cleaned(ties), ["w0000c2", "w0000c3", "w0000c1"]);
+  // Paint from the dawn on, and paint already faded by it, isn't on its round.
+  const late = { w0000d1: paintOn("tag", dawn), w0000d2: paintOn("tag", dawn - 3 * DAY - 1), w0000d3: paintOn("tag", dawn - 3 * DAY) };
+  assert.deepEqual(cleaned(late), ["w0000d3"]);
+  // Ten tags take two mornings.
+  const ten = {};
+  for (let i = 0; i < 10; i++) ten["w00010" + i] = paintOn("tag", before - i);
+  assert.deepEqual(Array.from(g.AllCity.buff(ten, dawn - 1, dawn + DAY, 0), (b) => b.at), [...Array(8).fill(dawn), dawn + DAY, dawn + DAY]);
+  // A tag at 05:30 UTC came before dawn in a UTC town, but after it in a UTC+1 one.
+  const early = { w0000e1: paintOn("tag", dawn - 1800) };
+  assert.deepEqual(cleaned(early, dawn - 7200, dawn, 0), ["w0000e1"]);
+  assert.deepEqual(cleaned(early, dawn - 7200, dawn, 60), []);
+});
+
+test("settling a quarter brings the Buff up to date, drops faded paint and keeps the last 200 buffs", () => {
+  const dawn = Date.UTC(2026, 9, 17, 6) / 1000;
+  const stored = {
+    utc_offset_min: 0,
+    buffed_until: dawn - 1,
+    walls: { w0000f1: paintOn("tag", dawn - 60), w0000f2: paintOn("piece", dawn - 31 * DAY), w0000f3: paintOn("burner", dawn - 60, { heaven: true }) },
+    buffs: Array.from({ length: 199 }, (_, i) => ({ wall: "w" + String(i).padStart(7, "0"), at: dawn - 2 * DAY })),
+  };
+  const q = g.AllCity.quarterFrom(stored, 60, dawn + 60);
+  assert.equal(q.utc_offset_min, 0, "a quarter keeps the offset it was first painted with");
+  assert.equal(g.AllCity.settle(q, dawn + 60), true, "a dawn passed");
+  assert.deepEqual(Object.keys(q.walls), ["w0000f3"], "the tag was buffed and the piece had faded");
+  assert.equal(q.buffs.length, 200);
+  assert.deepEqual({ ...q.buffs[199] }, { wall: "w0000f1", at: dawn });
+  assert.equal(q.buffed_until, dawn + 60);
+  assert.equal(Object.keys(stored.walls).length, 3, "what was read is left as it was");
+  assert.equal(stored.buffs.length, 199);
+  assert.equal(g.AllCity.settle(q, dawn + 120), false, "no dawn since");
+  q.walls.w0000f4 = paintOn("tag", dawn + 100);
+  q.walls.w0000f5 = paintOn("tag", dawn + 100);
+  assert.equal(g.AllCity.settle(q, dawn + DAY), true);
+  assert.equal(q.buffs.length, 200);
+  assert.equal(q.buffs[0].wall, "w0000002", "the oldest buffs go first");
+  assert.deepEqual(Array.from(g.AllCity.buffedSince(q, dawn), String), ["w0000f4", "w0000f5"]);
+  assert.deepEqual(Array.from(g.AllCity.buffedSince(q, dawn - 1), String), ["w0000f1", "w0000f4", "w0000f5"]);
+  q.buffs.push({ wall: "w0000f4", at: dawn + 2 * DAY });
+  assert.deepEqual(Array.from(g.AllCity.buffedSince(q, dawn), String), ["w0000f4", "w0000f5"], "each wall once");
+  const fresh = g.AllCity.quarterFrom(null, -300, T);
+  assert.deepEqual({ ...fresh, walls: { ...fresh.walls }, buffs: [...fresh.buffs] }, { utc_offset_min: -300, buffed_until: T, walls: {}, buffs: [] });
+});
+
+test("all-city paints walls by the rank rule, keeps the town's dawn, and the Buff comes overnight", () => {
+  const nk = fakeNk();
+  nk.usersGetId = (ids) => ids.map((userId) => ({ userId, username: "user_" + userId, displayName: userId === "u1" ? "Ana" : "" }));
+  const CITY = (userId) => ctx({ game: "all-city", version: "2026.42.0" }, { userId });
+  const tag = { town: "monaco", quarter: 12, wall: "w1a2b3c", rank: "tag", kit: { style: "handstyle", fill: "#c6f03c" }, grade: 70, eyes: 40, heaven: false, seconds: 3.5, utc_offset_min: 60, cap: false };
+  const paint = (extra, userId = "u1") => JSON.parse(g.rpcAllCityPaint(CITY(userId), logger, nk, JSON.stringify({ ...tag, ...extra })));
+  const walls = (extra = {}, userId = "u2") => JSON.parse(g.rpcAllCityWalls(CITY(userId), logger, nk, JSON.stringify({ town: "monaco", quarter: 12, ...extra })));
+  const stored = (key = "monaco:12") => nk.storage.get(`all-city.walls/${key}/${g.SYSTEM_USER_ID}`);
+  // Saturday 22:00 UTC, 23:00 in a UTC+1 town.
+  withClock(Date.UTC(2026, 9, 17, 22) / 1000, (clock) => {
+    assert.deepEqual(walls(), { walls: {}, last_dawn: 0, buffed: [] }, "nobody has painted here yet");
+    assert.equal(stored(), undefined, "and reading leaves nothing behind");
+    assert.deepEqual(paint({}), {
+      ok: true,
+      wall: { writer: "u1", name: "Ana", rank: "tag", kit: { style: "handstyle", fill: "#c6f03c" }, grade: 70, eyes: 40, heaven: false, at: clock.now, capped: false },
+    });
+    assert.deepEqual(paint({}, "u2"), { ok: false, reason: "rank" }, "a fresh tag holds against a tag");
+    clock.now += 60;
+    const over = paint({ rank: "throwup", seconds: 20, utc_offset_min: -300 }, "u2");
+    assert.equal(over.ok, true);
+    assert.equal(over.wall.name, "user_u2", "no display name falls back to the username");
+    assert.deepEqual(paint({}), { ok: false, reason: "rank" });
+    assert.equal(paint({ cap: true }).wall.capped, true);
+    assert.equal(paint({ wall: "w0000a1", rank: "burner", seconds: 300, eyes: 95 }).ok, true);
+    assert.equal(paint({ wall: "w0000a2", heaven: true, eyes: 100 }).ok, true);
+    assert.equal(stored().value.utc_offset_min, 60, "the first paint sets the town's offset");
+    assert.equal(stored().permissionRead, 0, "players read walls only through all-city.walls");
+    assert.deepEqual(Object.keys(walls().walls).sort(), ["w0000a1", "w0000a2", "w1a2b3c"]);
+    paint({ quarter: 13, utc_offset_min: 2000 });
+    assert.equal(stored("monaco:13").value.utc_offset_min, 840, "offsets are clamped");
+
+    // Overnight: dawn in town is 05:00 UTC. The Buff spends 1 on the tag and
+    // can't afford the burner; the heaven spot is out of its reach.
+    const evening = clock.now;
+    clock.now = Date.UTC(2026, 9, 18, 9) / 1000;
+    const morning = walls({ since: evening });
+    assert.deepEqual(Object.keys(morning.walls).sort(), ["w0000a1", "w0000a2"]);
+    assert.equal(morning.last_dawn, Date.UTC(2026, 9, 18, 5) / 1000);
+    assert.deepEqual(morning.buffed, ["w1a2b3c"]);
+    assert.equal(stored().value.buffed_until, clock.now, "the Buff's morning is saved");
+    assert.equal(stored().value.walls.w1a2b3c, undefined);
+    assert.deepEqual(walls({ since: morning.last_dawn }).buffed, [], "and reported once");
+    assert.deepEqual(walls().buffed, []);
+    const version = stored().version;
+    walls();
+    assert.equal(stored().version, version, "reads with no dawn since write nothing");
+    clock.now += DAY;
+    assert.deepEqual(Object.keys(walls().walls), ["w0000a2"], "the burner goes the next morning; the heaven spot stays");
+    assert.equal(paint({ seconds: 2 }, "u2").ok, true, "a buffed wall is bare");
+
+    const why = (extra) => {
+      try {
+        paint(extra);
+      } catch (err) {
+        return String(err.message).split(":")[0];
+      }
+      return "ok";
+    };
+    assert.equal(why({ wall: "w0000b1", rank: "piece", seconds: 89 }), "too_quick");
+    assert.equal(why({ rank: "burner", seconds: 239 }), "too_quick");
+    assert.equal(why({ town: "Monaco" }), "bad_town");
+    assert.equal(why({ town: "x".repeat(49) }), "town is too long");
+    assert.equal(why({ wall: "123456a" }), "bad_wall");
+    assert.equal(why({ wall: "w12345" }), "bad_wall");
+    assert.equal(why({ wall: "w1A2B3C" }), "bad_wall");
+    assert.equal(why({ rank: "mural" }), "bad_rank");
+    assert.equal(why({ kit: [1, 2] }), "bad_kit");
+    assert.equal(why({ kit: null }), "bad_kit");
+    assert.equal(why({ kit: { s: "x".repeat(2100) } }), "too_large");
+    assert.equal(why({ grade: 101 }), "grade must be between 0 and 100");
+    assert.equal(why({ eyes: -1 }), "eyes must be between 0 and 100");
+    assert.equal(why({ quarter: 10000 }), "quarter must be between 0 and 9999");
+    assert.equal(why({ seconds: "3" }), "seconds must be a number from 0 to 86400");
+    assert.equal(why({ heaven: "yes" }), "heaven must be true or false");
+    assert.equal(why({ utc_offset_min: 1.5 }), "utc_offset_min must be an integer");
+    const BURN = ctx({ game: "burn-rate", version: "0.1.0" });
+    assert.throws(() => g.rpcAllCityPaint(BURN, logger, nk, "{}"), (e) => /^wrong_game/.test(e.message));
+    assert.throws(() => g.rpcAllCityWalls(BURN, logger, nk, "{}"), (e) => /^wrong_game/.test(e.message));
+  });
+});
+
+test("all-city paints retry a busy quarter, fill up, and stop at 40 an hour", () => {
+  const nk = fakeNk();
+  nk.usersGetId = (ids) => ids.map((userId) => ({ userId, username: "ana", displayName: "Ana" }));
+  const tag = { town: "leeds", quarter: 2, wall: "w300000", rank: "tag", kit: {}, grade: 50, eyes: 50, heaven: false, seconds: 2, utc_offset_min: 0 };
+  const paint = (extra) => JSON.parse(g.rpcAllCityPaint(ctx({ game: "all-city", version: "0.1.0" }), logger, nk, JSON.stringify({ ...tag, ...extra })));
+  withClock(T, () => {
+    const full = {};
+    for (let i = 0; i < 1000; i++) full["w" + (0x200000 + i).toString(16)] = { ...paintOn("tag", T - 60), writer: "u9" };
+    nk.storage.set(`all-city.walls/leeds:2/${g.SYSTEM_USER_ID}`, {
+      collection: "all-city.walls", key: "leeds:2", userId: g.SYSTEM_USER_ID, version: "v1",
+      value: { utc_offset_min: 0, buffed_until: T - 60, walls: full, buffs: [] },
+    });
+    assert.deepEqual(paint({}), { ok: false, reason: "full" });
+    assert.equal(paint({ wall: "w200000", rank: "throwup", seconds: 15 }).ok, true, "walls in a full quarter can still be gone over");
+
+    const write = nk.storageWrite;
+    let clashes = 1;
+    nk.storageWrite = (objs) => {
+      if (clashes-- > 0) throw new Error("version conflict");
+      return write(objs);
+    };
+    assert.equal(paint({ quarter: 3 }).ok, true, "a clash is retried");
+    clashes = 99;
+    assert.deepEqual(paint({ quarter: 3, wall: "w300001" }), { ok: false, reason: "busy" });
+    nk.storageWrite = write;
+    // Every paint the server takes counts, refused or not: four so far.
+    for (let i = 4; i < 40; i++) assert.equal(paint({ quarter: 4, wall: "w4" + String(i).padStart(5, "0") }).ok, true, String(i));
+    assert.deepEqual(paint({ quarter: 4, wall: "w400040" }), { ok: false, reason: "rate" });
+  });
 });
