@@ -16,7 +16,7 @@ test("the registry entry has no quick match and the boards the game needs", () =
   assert.deepEqual(Array.from(g.Registry.validateAll()), []);
   const game = g.GAME_SILVER_TONGUE;
   assert.equal(game.rooms.matchmaking, false);
-  assert.equal(game.rooms.maxPlayers, 4);
+  assert.equal(game.rooms.maxPlayers, 8);
   const board = (id) => game.leaderboards.find((b) => b.id === id);
   assert.equal(board("contract_weekly").clientSubmit, true);
   assert.equal(board("contract_weekly").reset, "0 0 * * 1");
@@ -294,4 +294,17 @@ test("the Switchboard refuses bad requests and rates calls", () => {
   assert.equal(calls.length, 0);
   for (let i = 0; i < 30; i++) go("u9", { messages: [{ role: "user", content: "x" }], max_tokens: 1 });
   rejects(() => go("u9", { messages: [{ role: "user", content: "x" }], max_tokens: 1 }), 8, "rate_limited");
+});
+
+test("two rival crews are two reports of one night: the winners are paid and the others only tried", () => {
+  const { nk, records } = reportWorld();
+  assert.deepEqual(send(nk, "host", reportBody({ round: 1, players: [{ user_id: "host", held: false }] })), { ok: true, round: 1 });
+  const lost = { win: false, clean: false, quiet: false, silver: false, take: 0, players: [{ user_id: "guest", held: false }] };
+  assert.deepEqual(send(nk, "host", reportBody({ round: 2, ...lost })), { ok: true, round: 2 });
+  assert.equal(read(nk, "silver-tongue.stats", "stats", "host").jobs, 1);
+  const guest = read(nk, "silver-tongue.stats", "stats", "guest");
+  assert.equal(guest.tries, 1);
+  assert.equal(guest.jobs, 0);
+  assert.equal(guest.take, 0);
+  assert.equal(records.filter((r) => r.board === "silver-tongue.jobs").length, 1);
 });

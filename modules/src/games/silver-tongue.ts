@@ -2,7 +2,8 @@
 // say out loud (game-ideas, idea 23). The game runs on the player's machine,
 // with its own models; this module is the small online side of M3.
 //
-// Crews of one to four play a job in a bridge room named "silver-tongue:<CODE>"
+// One crew of one to four, or two rival crews racing for the same prize (up to
+// eight players), play a job in a bridge room named "silver-tongue:<CODE>"
 // (no quick match: a con job needs a crew who agreed to it). The host reports
 // each finished job with silver-tongue.job_report, which keeps every crew
 // member's stats and what the cast remember of them (the "memory" object,
@@ -71,7 +72,7 @@ const GAME_SILVER_TONGUE: Registry.GameDef = {
   // A job's report card, shared by code.
   shares: [{ name: "report", maxBytes: 8192, perUserLimit: 30 }],
   // tickRate, mode and hostGraceSec only apply to relay rooms.
-  rooms: { transport: "bridge", minPlayers: 1, maxPlayers: 4, tickRate: 20, mode: "host", matchmaking: false, hostGraceSec: 15 },
+  rooms: { transport: "bridge", minPlayers: 1, maxPlayers: 8, tickRate: 20, mode: "host", matchmaking: false, hostGraceSec: 15 },
 };
 
 namespace SilverTongue {
