@@ -160,6 +160,7 @@ yq() {
 #   games.<id>.<setting>   -> GAME_<ID>_<SETTING>
 #   blobs.<setting>        -> S3_<SETTING> (secret key comes from secrets)
 #   shares.hide-threshold  -> SHARE_HIDE_THRESHOLD
+#   switchboard.<setting>  -> SWITCHBOARD_<SETTING> (the key comes from secrets)
 runtime_env() {
   snapctl get -d games 2>/dev/null | jq -r '
     (.games // {}) | to_entries[] | .key as $g | (.value // {}) | to_entries[]
@@ -178,6 +179,16 @@ runtime_env() {
   v="$(cfg shares.hide-threshold)"
   if [ -n "$v" ]; then
     echo "SHARE_HIDE_THRESHOLD=$v"
+  fi
+  for k in url model user-budget daily-cap; do
+    v="$(cfg "switchboard.$k")"
+    if [ -n "$v" ]; then
+      echo "SWITCHBOARD_$(echo "$k" | tr 'a-z-' 'A-Z_')=$v"
+    fi
+  done
+  v="$(secret_get switchboard-key)"
+  if [ -n "$v" ]; then
+    echo "SWITCHBOARD_KEY=$v"
   fi
 }
 

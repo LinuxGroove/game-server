@@ -69,6 +69,10 @@ function InitModule(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkrunt
   initializer.registerRpc("race-day.race_report", rpcRaceDayRaceReport);
   initializer.registerRpc("burn-rate.run_report", rpcBurnRateRunReport);
   initializer.registerRpc("burn-rate.party_report", rpcBurnRatePartyReport);
+  initializer.registerRpc("silver-tongue.job_report", rpcSilverTongueJobReport);
+  initializer.registerRpc("silver-tongue.memory", rpcSilverTongueMemory);
+  initializer.registerRpc("silver-tongue.buy_face", rpcSilverTongueBuyFace);
+  initializer.registerRpc("silver-tongue.switchboard", rpcSilverTongueSwitchboard);
 
   Leaderboards.createAll(ctx, logger, nk);
   Telemetry.init(ctx, nk);

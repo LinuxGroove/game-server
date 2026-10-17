@@ -695,6 +695,75 @@ async function main() {
     for (const s of sockets) s.close();
   });
 
+  await step("silver-tongue crews report jobs into stats, memory and boards, and the contract is checked", async () => {
+    const name = "silver-tongue:" + code();
+    const players = [];
+    const sockets = [];
+    let matchId = "";
+    for (let i = 0; i < 2; i++) {
+      const p = await login("silver-tongue", "0.1.0");
+      const s = await new Socket(p).connect();
+      matchId = (await createNamed(s, name)).match_id;
+      players.push(p);
+      sockets.push(s);
+    }
+    const host = players[0];
+    const guest = players[1];
+    const job = {
+      match_id: matchId, round: 1, job: "marlin_safe", venue: "marlin", circuit: 0,
+      win: true, clean: true, quiet: false, silver: true, take: 6000,
+      players: [
+        { user_id: host.userId, held: false, memories: { purser: ["asked about the safe"] } },
+        { user_id: guest.userId, held: true, memories: { purser: ["saw a stranger"] } },
+      ],
+    };
+    await expectError(rpc(guest, "silver-tongue.job_report", job), 403, "not_host");
+    await expectError(rpc(host, "silver-tongue.job_report", { ...job, job: "nope" }), 400, "unknown_job");
+    await expectError(rpc(host, "silver-tongue.job_report", { ...job, take: 6500 }), 400, "bad_take");
+    assert.deepEqual(await rpc(host, "silver-tongue.job_report", job), { ok: true, round: 1 });
+    await expectError(rpc(host, "silver-tongue.job_report", job), 409, "already_reported");
+    const stats = await http("POST", "/v2/storage", {
+      token: host.token,
+      body: { object_ids: [{ collection: "silver-tongue.stats", key: "stats", user_id: guest.userId }] },
+    });
+    const v = JSON.parse(stats.objects[0].value);
+    assert.equal(v.jobs, 1);
+    assert.equal(v.held, 1);
+    assert.equal(v.take, 6000);
+    const mem = await rpc(guest, "silver-tongue.memory");
+    assert.equal(mem.burned, true);
+    assert.equal(mem.take, 6000);
+    assert.deepEqual(mem.memories.marlin.purser, ["saw a stranger"]);
+    assert.equal((await rpc(host, "silver-tongue.memory")).burned, false);
+    await expectError(rpc(host, "silver-tongue.buy_face"), 400, "cannot_buy");
+    const bought = await rpc(guest, "silver-tongue.buy_face");
+    assert.equal(bought.burned, false);
+    assert.equal(bought.faces, 1);
+    assert.equal(bought.take, 0);
+    const jobs = await http("GET", `/v2/leaderboard/silver-tongue.jobs?owner_ids=${guest.userId}`, { token: host.token });
+    assert.equal(Number(jobs.owner_records[0].score), 1);
+    const take = await http("GET", `/v2/leaderboard/silver-tongue.take?owner_ids=${host.userId}`, { token: host.token });
+    assert.equal(Number(take.owner_records[0].score), 6000);
+    // The weekly contract: Sunday-to-Saturday weeks numbered like ISO weeks.
+    const t = new Date(Date.now() + 86400000);
+    const day = Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate());
+    const thursday = new Date(day + (3 - ((t.getUTCDay() + 6) % 7)) * 86400000);
+    const seed = thursday.getUTCFullYear() * 100 + Math.floor((thursday - Date.UTC(thursday.getUTCFullYear(), 0, 1)) / 604800000) + 1;
+    await rpc(host, "core.score_submit", { board: "contract_weekly", score: 6000, metadata: { seed, job: "marlin_safe" } });
+    await expectError(rpc(host, "core.score_submit", { board: "contract_weekly", score: 6000, metadata: { seed: 190001, job: "marlin_safe" } }), 400, "bad_contract");
+    await expectError(rpc(host, "core.score_submit", { board: "contract_weekly", score: 6100, metadata: { seed, job: "marlin_safe" } }), 400, "bad_take");
+    await expectError(rpc(host, "core.score_submit", { board: "jobs", score: 1 }), 403, "server_only");
+    const contract = await http("GET", `/v2/leaderboard/silver-tongue.contract_weekly?owner_ids=${host.userId}`, { token: host.token });
+    assert.equal(Number(contract.owner_records[0].score), 6000);
+    // The Switchboard is off unless the server names an upstream model.
+    if (!process.env.SWITCHBOARD_URL) {
+      await expectError(rpc(host, "silver-tongue.switchboard", { messages: [{ role: "user", content: "hi" }] }), 503, "switchboard_off");
+    }
+    const gh = await login("graveyard-hollow", "0.1.0");
+    await expectError(rpc(gh, "silver-tongue.memory"), 403, "wrong_game");
+    for (const s of sockets) s.close();
+  });
+
   // Account lifecycle.
   await step("players can export and delete their account", async () => {
     const exported = await rpc(c, "core.account_export");

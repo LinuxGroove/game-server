@@ -40,6 +40,7 @@
     "./src/games/race-day.ts",
     "./src/games/verdigris-protocol.ts",
     "./src/games/burn-rate.ts",
+    "./src/games/silver-tongue.ts",
     "./src/games/sandbox.ts",
     "./src/games/index.ts",
     "./src/main.ts"

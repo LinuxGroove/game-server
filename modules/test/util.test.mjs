@@ -37,6 +37,7 @@ test("the shipped game registry is valid", () => {
   assert.ok(ids.includes("foam-frenzy"), ids.join(", "));
   assert.ok(ids.includes("race-day"), ids.join(", "));
   assert.ok(ids.includes("burn-rate"), ids.join(", "));
+  assert.ok(ids.includes("silver-tongue"), ids.join(", "));
   assert.ok(ids.includes("sandbox"), ids.join(", "));
 });
 
