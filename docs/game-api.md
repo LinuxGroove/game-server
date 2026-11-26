@@ -36,6 +36,7 @@ work without a server.
 - [Race Day](#race-day)
 - [Verdigris Protocol](#verdigris-protocol)
 - [Burn Rate](#burn-rate)
+- [Potluck](#potluck)
 - [Sandbox test game](#sandbox-test-game)
 
 ## Connecting
@@ -613,6 +614,17 @@ burn-rate.party_report {
 round wins add up to no more than `rounds` (`too_many_winners`, `bad_result`).
 The server makes the same room checks as for Graveyard Hollow round reports,
 then updates each player's stats and the `wins` board.
+
+## Potluck
+
+Game id `potluck`. No rooms, boards or collections: friends' worlds are
+hosted by the game itself or by `potluck-server`, outside Nakama. Creations
+are shared with share codes of kind `creation` (up to 256 KB, 200 per
+player): `data` is the creation as JSON (its files, its knob settings and its
+manifest), `title` is its name, and `meta` holds `by`, `kind` and `id`.
+Players load one by its code from Load a creation from a code. The minimum
+version is `0.0.0` while the game is in test, since builds from source report
+`0.0.0+...`.
 
 ## Sandbox test game
 
